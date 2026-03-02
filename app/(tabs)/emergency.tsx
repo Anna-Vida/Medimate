@@ -1,4 +1,1 @@
-import EmergencyScreen from '../emergency';
-
-export default EmergencyScreen;
-
+import EmergencyScreen from '../emergency';export default EmergencyScreen;

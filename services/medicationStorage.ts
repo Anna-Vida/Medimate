@@ -126,7 +126,7 @@ export async function markMedicationTaken(id: string): Promise<void> {
             if (medications[index].inventoryCount !== undefined && medications[index].inventoryCount! > 0) {
                 // Determine how much to decrement based on dosage or just 1 by default if they take it per schedule 
                 // Assumes 1 dose = 1 decrement per 'taken' action
-                medications[index].inventoryCount! -= 1; 
+                medications[index].inventoryCount! -= 1;
             }
             await AsyncStorage.setItem(MEDICATION_STORAGE_KEY, JSON.stringify(medications));
         }
@@ -241,6 +241,79 @@ export async function clearAllMedications(): Promise<void> {
         await AsyncStorage.removeItem(MEDICATION_STORAGE_KEY);
     } catch (error) {
         console.error('Error clearing medications:', error);
+        throw error;
+    }
+}
+
+// ─── Reminder Schedules ─────────────────────────────────────────────────────
+
+const REMINDER_STORAGE_KEY = '@medimate_reminders';
+
+export interface ReminderSchedule {
+    id: string;
+    medicineName: string;
+    frequency: 'Everyday' | '2x Daily' | '3x Daily' | 'Weekly' | 'As Needed';
+    reminderTime: string;   // HH:MM
+    dose: string;           // e.g. "150mg"
+    measurement: string;    // e.g. "2 times"
+    startDate: string;      // ISO date string
+    endDate: string;        // ISO date string
+    color: string;          // pastel card color
+    createdAt: string;      // ISO date string
+}
+
+const CARD_COLORS = ['#FFF1EC', '#ECFDF5', '#EFF6FF', '#FDF4FF', '#FFFBEB', '#F0FDFA'];
+
+export async function saveReminder(reminder: Omit<ReminderSchedule, 'id' | 'createdAt' | 'color'>): Promise<ReminderSchedule> {
+    try {
+        const all = await getAllReminders();
+        const newReminder: ReminderSchedule = {
+            ...reminder,
+            id: Date.now().toString(),
+            createdAt: new Date().toISOString(),
+            color: CARD_COLORS[all.length % CARD_COLORS.length],
+        };
+        all.push(newReminder);
+        await AsyncStorage.setItem(REMINDER_STORAGE_KEY, JSON.stringify(all));
+        return newReminder;
+    } catch (error) {
+        console.error('Error saving reminder:', error);
+        throw error;
+    }
+}
+
+export async function getAllReminders(): Promise<ReminderSchedule[]> {
+    try {
+        const data = await AsyncStorage.getItem(REMINDER_STORAGE_KEY);
+        if (!data) return [];
+        return JSON.parse(data) as ReminderSchedule[];
+    } catch (error) {
+        console.error('Error getting reminders:', error);
+        return [];
+    }
+}
+
+export async function updateReminder(id: string, updates: Partial<ReminderSchedule>): Promise<void> {
+    try {
+        const all = await getAllReminders();
+        const index = all.findIndex(r => r.id === id);
+        if (index !== -1) {
+            all[index] = { ...all[index], ...updates };
+            await AsyncStorage.setItem(REMINDER_STORAGE_KEY, JSON.stringify(all));
+        }
+    } catch (error) {
+        console.error('Error updating reminder:', error);
+        throw error;
+    }
+}
+
+export async function deleteReminder(id: string): Promise<void> {
+    try {
+        const all = await getAllReminders();
+        const filtered = all.filter(r => r.id !== id);
+        await AsyncStorage.setItem(REMINDER_STORAGE_KEY, JSON.stringify(filtered));
+    } catch (error) {
+        console.error('Error deleting reminder:', error);
         throw error;
     }
 }

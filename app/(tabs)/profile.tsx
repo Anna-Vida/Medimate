@@ -46,12 +46,12 @@ const defaultProfile: UserProfile = {
 
 // ── Styles defined FIRST so components below can reference them ──────────────
 const styles = StyleSheet.create({
-    root: { flex: 1, backgroundColor: '#F9FAFB' },
+    root: { flex: 1, backgroundColor: '#F8FAFC' },
     header: {
         paddingTop: verticalScale(48),
         paddingBottom: verticalScale(28),
         paddingHorizontal: scale(20),
-        backgroundColor: '#F9FAFB',
+        backgroundColor: '#F8FAFC',
     },
     headerRow: {
         flexDirection: 'row',
@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: scale(8),
-        backgroundColor: '#334155',
+        backgroundColor: '#0D9488',
         paddingVertical: verticalScale(14),
         borderRadius: 14,
     },
@@ -349,18 +349,13 @@ export default function ProfileScreen() {
             {/* Header */}
             <View style={styles.header}>
                 <View style={styles.headerRow}>
-                    <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7}>
-                        <View style={styles.headerBtn}>
-                            <Ionicons name="arrow-back" size={20} color="#334155" />
-                        </View>
-                    </TouchableOpacity>
                     <Text style={styles.headerTitle}>Profile</Text>
                     <TouchableOpacity
                         onPress={isEditing ? saveProfile : () => setIsEditing(true)}
                         activeOpacity={0.7}
                         disabled={isSaving}
                     >
-                        <View style={[styles.headerBtn, isEditing ? { backgroundColor: '#10B981' } : {}]}>
+                        <View style={[styles.headerBtn, isEditing ? { backgroundColor: '#0D9488' } : {}]}>
                             <Ionicons name={isEditing ? 'checkmark' : 'create-outline'} size={20} color={isEditing ? '#FFF' : '#334155'} />
                         </View>
                     </TouchableOpacity>
@@ -377,8 +372,8 @@ export default function ProfileScreen() {
                                 {profile.age ? <View style={styles.pill}><Text style={styles.pillText}>{profile.age} yrs</Text></View> : null}
                                 {profile.sex ? <View style={styles.pill}><Text style={styles.pillText}>{profile.sex}</Text></View> : null}
                                 {profile.bloodType
-                                    ? <View style={[styles.pill, { backgroundColor: 'rgba(220,38,38,0.2)' }]}>
-                                        <Text style={[styles.pillText, { color: '#FEE2E2' }]}>{profile.bloodType}</Text>
+                                    ? <View style={[styles.pill, { backgroundColor: '#FEE2E2' }]}>
+                                        <Text style={[styles.pillText, { color: '#DC2626' }]}>{profile.bloodType}</Text>
                                     </View>
                                     : null}
                             </View>
@@ -466,7 +461,7 @@ export default function ProfileScreen() {
     );
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
             <StatusBar barStyle="dark-content" />
             <View style={styles.root}>
                 {Content}
