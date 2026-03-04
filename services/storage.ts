@@ -11,9 +11,7 @@ export interface SavedScan {
 
 const STORAGE_KEY = 'recent_scans';
 
-/**
- * Save a new scan to the recent list and auto-create reminders
- */
+
 export const saveScan = async (analysis: MedicineAnalysis[], imageUri: string): Promise<SavedScan> => {
     try {
         const newScan: SavedScan = {

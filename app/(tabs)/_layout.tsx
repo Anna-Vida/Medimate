@@ -3,14 +3,14 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Tabs, useRouter } from "expo-router";
 import React from "react";
 import { Platform, StyleSheet, View } from "react-native";
+import { Colors } from "../../constants/Colors";
 
-// Shared palette — matches home screen
-const TEAL = "#2DD4BF";
-const TEAL_DARK = "#0D9488";
-const BAR_BG = "#FFFFFF";
+const TEAL = Colors.primary;
+const TEAL_DARK = Colors.primaryDark;
+const BAR_BG = Colors.surface;
 const BAR_BG_END = "#F1F5F9";
-const INACTIVE = "#94A3B8";
-const ACTIVE_TEXT = "#0D9488";
+const INACTIVE = Colors.textTertiary;
+const ACTIVE_TEXT = Colors.primaryDark;
 
 export default function TabLayout() {
   const router = useRouter();
@@ -216,6 +216,6 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: 36,
     borderWidth: 2,
-    borderColor: "rgba(13, 148, 136, 0.2)",
+    borderColor: `${Colors.primary}33`,
   },
 });

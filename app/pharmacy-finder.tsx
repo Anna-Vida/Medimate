@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { moderateScale, scale, verticalScale } from "../utils/responsive";
+import { Colors } from "../constants/Colors";
 
 interface Pharmacy {
   name: string;
@@ -35,7 +36,7 @@ const PHARMACIES: Pharmacy[] = [
   {
     name: "Watsons",
     icon: "medkit",
-    color: "#0D9488",
+    color: Colors.primary,
     description: "Health, beauty & wellness products",
     hotline: "028858-5071",
   },
@@ -161,7 +162,7 @@ export default function PharmacyFinderScreen() {
         {/* Location Card */}
         <View style={styles.locationCard}>
           <View style={styles.locationIcon}>
-            <Ionicons name="location" size={20} color="#0D9488" />
+            <Ionicons name="location" size={20} color={Colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.locationTitle}>
@@ -200,7 +201,7 @@ export default function PharmacyFinderScreen() {
             activeOpacity={0.85}
           >
             <LinearGradient
-              colors={["#0D9488", "#2DD4BF"]}
+              colors={[Colors.primary, Colors.secondary]}
               style={styles.nearbyBtnInner}
             >
               <Ionicons name="navigate" size={22} color="#FFF" />
@@ -219,7 +220,7 @@ export default function PharmacyFinderScreen() {
             activeOpacity={0.85}
           >
             <View style={styles.dohIcon}>
-              <Ionicons name="call" size={24} color="#0D9488" />
+              <Ionicons name="call" size={24} color={Colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.dohTitle}>DOH Hotline</Text>
@@ -277,11 +278,11 @@ export default function PharmacyFinderScreen() {
                   />
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: "#0D948815" }]}
+                  style={[styles.actionBtn, { backgroundColor: Colors.primary + "15" }]}
                   onPress={() => handleCall(pharmacy.hotline)}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="call-outline" size={16} color="#0D9488" />
+                  <Ionicons name="call-outline" size={16} color={Colors.primary} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -292,13 +293,13 @@ export default function PharmacyFinderScreen() {
         <Animated.View entering={FadeInUp.duration(400).delay(700)}>
           <View style={styles.noteCard}>
             <View style={styles.noteIconWrap}>
-              <Ionicons name="information-circle" size={24} color="#0D9488" />
+              <Ionicons name="information-circle" size={24} color={Colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.noteTitle}>Senior Citizen Discount</Text>
               <Text style={styles.noteText}>
                 Under RA 9994, Filipinos 60+ get a{" "}
-                <Text style={{ fontWeight: "700", color: "#0D9488" }}>
+                <Text style={{ fontWeight: "700", color: Colors.primary }}>
                   20% discount
                 </Text>{" "}
                 on medicines at all registered pharmacies. Bring your Senior
@@ -315,12 +316,12 @@ export default function PharmacyFinderScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F8FAFC" },
+  root: { flex: 1, backgroundColor: Colors.background },
   header: {
     paddingTop: verticalScale(48),
     paddingBottom: verticalScale(20),
     paddingHorizontal: scale(20),
-    backgroundColor: "#F8FAFC",
+    backgroundColor: Colors.background,
   },
   headerRow: {
     flexDirection: "row",
@@ -332,7 +333,7 @@ const styles = StyleSheet.create({
     width: scale(44),
     height: scale(44),
     borderRadius: 14,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -351,17 +352,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: scale(12),
-    backgroundColor: "#F0FDFA",
+    backgroundColor: Colors.primaryBg,
     borderRadius: 20,
     padding: scale(14),
     borderWidth: 1,
-    borderColor: "#CCFBF1",
+    borderColor: Colors.primaryLight + "40",
   },
   locationIcon: {
     width: scale(40),
     height: scale(40),
     borderRadius: 14,
-    backgroundColor: "#CCFBF1",
+    backgroundColor: Colors.primaryLight + "60",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -377,7 +378,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   retryText: {
-    color: "#0D9488",
+    color: Colors.primary,
     fontWeight: "700",
     fontSize: moderateScale(14),
   },
@@ -424,7 +425,7 @@ const styles = StyleSheet.create({
     width: scale(52),
     height: scale(52),
     borderRadius: 18,
-    backgroundColor: "#F0FDFA",
+    backgroundColor: Colors.primaryBg,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -449,7 +450,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#0D9488",
+    backgroundColor: Colors.primary,
     paddingHorizontal: scale(12),
     paddingVertical: verticalScale(7),
     borderRadius: 12,
@@ -514,18 +515,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: scale(12),
     alignItems: "flex-start",
-    backgroundColor: "#F0FDFA",
+    backgroundColor: Colors.primaryBg,
     borderRadius: 18,
     padding: scale(16),
     borderWidth: 1.5,
-    borderColor: "#CCFBF1",
+    borderColor: Colors.primaryLight + "40",
     marginTop: 4,
   },
   noteIconWrap: {
     width: scale(44),
     height: scale(44),
     borderRadius: 14,
-    backgroundColor: "#CCFBF1",
+    backgroundColor: Colors.primaryLight + "60",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -537,7 +538,7 @@ const styles = StyleSheet.create({
   },
   noteText: {
     fontSize: moderateScale(13),
-    color: "#0F766E",
+    color: Colors.primaryDark,
     lineHeight: 22,
     fontWeight: "500",
   },

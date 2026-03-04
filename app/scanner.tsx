@@ -21,6 +21,7 @@ import {
   Vibration,
   View,
 } from "react-native";
+import { Colors } from "../constants/Colors";
 import {
   analyzeInteractions,
   analyzeMedicineImage,
@@ -125,13 +126,13 @@ const RecentScansModal = ({
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>Recent Scans</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeIconBtn}>
-              <Ionicons name="close-circle" size={32} color="#334155" />
+              <Ionicons name="close-circle" size={32} color={Colors.primaryDark} />
             </TouchableOpacity>
           </View>
           {loading ? (
             <ActivityIndicator
               size="large"
-              color="#334155"
+              color={Colors.primaryDark}
               style={{ marginTop: 40 }}
             />
           ) : scans.length === 0 ? (
@@ -167,7 +168,7 @@ const ALARM_TONES = [
     name: "Standard",
     icon: "notifications",
     pattern: [0, 400, 200, 400, 200, 400],
-    color: "#0D9488",
+    color: Colors.primary,
   },
   {
     id: "urgent",
@@ -240,7 +241,7 @@ const CustomTimePicker = ({
       <View style={styles.pickerOverlay}>
         <View style={styles.pickerCard}>
           <View style={styles.pickerHeaderContainer}>
-            <Ionicons name="time" size={28} color="#334155" />
+            <Ionicons name="time" size={28} color={Colors.primaryDark} />
             <View style={{ flex: 1 }}>
               <Text style={styles.pickerHeader}>Set Medication Reminder</Text>
               {medicineName && (
@@ -264,7 +265,7 @@ const CustomTimePicker = ({
                   onPress={() => setHour((h) => (h === 12 ? 1 : h + 1))}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="chevron-up" size={36} color="#334155" />
+                  <Ionicons name="chevron-up" size={36} color={Colors.primaryDark} />
                 </TouchableOpacity>
                 <Text style={styles.timeDigit}>
                   {hour.toString().padStart(2, "0")}
@@ -274,7 +275,7 @@ const CustomTimePicker = ({
                   onPress={() => setHour((h) => (h === 1 ? 12 : h - 1))}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="chevron-down" size={36} color="#334155" />
+                  <Ionicons name="chevron-down" size={36} color={Colors.primaryDark} />
                 </TouchableOpacity>
               </View>
               <Text style={styles.timeSeparator}>:</Text>
@@ -285,7 +286,7 @@ const CustomTimePicker = ({
                   onPress={() => setMinute((m) => (m >= 55 ? 0 : m + 5))}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="chevron-up" size={36} color="#334155" />
+                  <Ionicons name="chevron-up" size={36} color={Colors.primaryDark} />
                 </TouchableOpacity>
                 <Text style={styles.timeDigit}>
                   {minute.toString().padStart(2, "0")}
@@ -295,7 +296,7 @@ const CustomTimePicker = ({
                   onPress={() => setMinute((m) => (m < 5 ? 55 : m - 5))}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="chevron-down" size={36} color="#334155" />
+                  <Ionicons name="chevron-down" size={36} color={Colors.primaryDark} />
                 </TouchableOpacity>
               </View>
               {/* AM/PM */}
@@ -489,7 +490,7 @@ const LanguagePicker = ({
                   paddingVertical: 13,
                   paddingHorizontal: 16,
                   borderRadius: 20,
-                  backgroundColor: isSelected ? "#F0FDFA" : "transparent",
+                  backgroundColor: isSelected ? Colors.primaryBg : "transparent",
                   borderWidth: isSelected ? 1 : 0,
                   borderColor: "#BFDBFE",
                 }}
@@ -498,7 +499,7 @@ const LanguagePicker = ({
                   style={{
                     fontSize: 16,
                     flex: 1,
-                    color: isSelected ? "#1D4ED8" : "#334155",
+                    color: isSelected ? Colors.primary : Colors.primaryDark,
                     fontWeight: isSelected ? "700" : "500",
                   }}
                 >
@@ -527,7 +528,7 @@ const LanguagePicker = ({
                     </View>
                   )}
                 {isSelected && (
-                  <Ionicons name="checkmark-circle" size={20} color="#334155" />
+                  <Ionicons name="checkmark-circle" size={20} color={Colors.primaryDark} />
                 )}
               </TouchableOpacity>
             );
@@ -920,7 +921,7 @@ export default function Scanner() {
                     <Text style={styles.langChipText}>
                       {selectedLang.label.split(" ")[0]}
                     </Text>
-                    <Ionicons name="chevron-down" size={12} color="#0D9488" />
+                    <Ionicons name="chevron-down" size={12} color={Colors.primary} />
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={retakePhoto}
@@ -983,7 +984,7 @@ export default function Scanner() {
                         paddingHorizontal: 4,
                       }}
                     >
-                      <ActivityIndicator size={16} color="#0D9488" />
+                      <ActivityIndicator size={16} color={Colors.primary} />
                       <Text
                         style={{
                           fontSize: 14,
@@ -1030,7 +1031,7 @@ export default function Scanner() {
                           activeOpacity={0.7}
                         >
                           <View style={styles.medCardIconWrap}>
-                            <Ionicons name="medkit" size={18} color="#0D9488" />
+                            <Ionicons name="medkit" size={18} color={Colors.primary} />
                           </View>
                           <View style={{ flex: 1, marginRight: 8 }}>
                             <Text style={styles.medCardTitle} numberOfLines={2}>
@@ -1084,7 +1085,7 @@ export default function Scanner() {
                               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                             >
                               {speakingIndex === index ? (
-                                <ActivityIndicator size={18} color="#0D9488" />
+                                <ActivityIndicator size={18} color={Colors.primary} />
                               ) : (
                                 <Ionicons
                                   name="volume-medium-outline"
@@ -1108,13 +1109,13 @@ export default function Scanner() {
                                 <View
                                   style={[
                                     styles.statIcon,
-                                    { backgroundColor: "#F0FDFA" },
+                                    { backgroundColor: Colors.primaryBg },
                                   ]}
                                 >
                                   <MaterialIcons
                                     name="schedule"
                                     size={22}
-                                    color="#0D9488"
+                                    color={Colors.primary}
                                   />
                                 </View>
                                 <Text style={styles.statLabel}>Frequency</Text>
@@ -1145,7 +1146,7 @@ export default function Scanner() {
                                 <MaterialIcons
                                   name="description"
                                   size={24}
-                                  color="#0D9488"
+                                  color={Colors.primary}
                                 />
                                 <Text style={styles.cardTitle}>Purpose</Text>
                                 <TouchableOpacity
@@ -1155,7 +1156,7 @@ export default function Scanner() {
                                   <Ionicons
                                     name="volume-medium"
                                     size={24}
-                                    color="#0D9488"
+                                    color={Colors.primary}
                                   />
                                 </TouchableOpacity>
                               </View>
@@ -1498,7 +1499,7 @@ export default function Scanner() {
                   <MaterialIcons
                     name="medication"
                     size={16}
-                    color={scanMode === "pill" ? "#0D9488" : "#FFF"}
+                    color={scanMode === "pill" ? Colors.primary : "#FFF"}
                   />
                   <Text
                     style={[
@@ -1519,7 +1520,7 @@ export default function Scanner() {
                   <Ionicons
                     name="document-text"
                     size={16}
-                    color={scanMode === "prescription" ? "#0D9488" : "#FFF"}
+                    color={scanMode === "prescription" ? Colors.primary : "#FFF"}
                   />
                   <Text
                     style={[
@@ -1616,14 +1617,14 @@ export default function Scanner() {
               {successMessage.isAuto ? "Auto-Reminder Set!" : "Reminder Set!"}
             </Text>
             <View style={styles.successDetailRow}>
-              <Ionicons name="time-outline" size={20} color="#0D9488" />
+              <Ionicons name="time-outline" size={20} color={Colors.primary} />
               <Text style={styles.successTime}>{successMessage.time}</Text>
             </View>
             <View style={styles.successDetailRow}>
               <Ionicons
                 name="notifications-outline"
                 size={20}
-                color="#0D9488"
+                color={Colors.primary}
               />
               <Text style={styles.successAlarm}>
                 Alarm: {successMessage.tone}
@@ -1671,7 +1672,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   modeToggleTextActive: {
-    color: "#0D9488",
+    color: Colors.primary,
   },
   topOverlay: {
     position: "absolute",
@@ -1761,10 +1762,10 @@ const styles = StyleSheet.create({
     width: scale(72),
     height: scale(72),
     borderRadius: scale(36),
-    backgroundColor: "#0D9488",
+    backgroundColor: Colors.primary,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#0D9488",
+    shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1836,7 +1837,7 @@ const styles = StyleSheet.create({
     fontWeight: "300",
     minWidth: scale(90),
     textAlign: "center",
-    color: "#0D9488",
+    color: Colors.primary,
   },
   timeSeparator: {
     fontSize: moderateScale(72),
@@ -1854,7 +1855,7 @@ const styles = StyleSheet.create({
     minWidth: scale(60),
     alignItems: "center",
   },
-  amPmSelected: { backgroundColor: "#0D9488" },
+  amPmSelected: { backgroundColor: Colors.primary },
   amPmLabel: {
     fontSize: moderateScale(16),
     fontWeight: "600",
@@ -1878,7 +1879,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: verticalScale(14),
     borderRadius: 20,
-    backgroundColor: "#0D9488",
+    backgroundColor: Colors.primary,
     alignItems: "center",
   },
   pickerBtnTextCancel: {
@@ -1977,7 +1978,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: scale(10),
     marginVertical: verticalScale(6),
-    backgroundColor: "#F0FDFA",
+    backgroundColor: Colors.primaryBg,
     paddingVertical: verticalScale(12),
     paddingHorizontal: scale(20),
     borderRadius: 20,
@@ -1986,12 +1987,12 @@ const styles = StyleSheet.create({
   successTime: {
     fontSize: moderateScale(18),
     fontWeight: "600",
-    color: "#0D9488",
+    color: Colors.primary,
   },
   successAlarm: {
     fontSize: moderateScale(16),
     fontWeight: "600",
-    color: "#0D9488",
+    color: Colors.primary,
   },
   // --- Restored Missing Styles ---
   recentItem: {
@@ -2062,7 +2063,7 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontSize: moderateScale(22),
     fontWeight: "600",
-    color: "#0D9488",
+    color: Colors.primary,
   },
   closeIconBtn: { padding: 8 },
   recentList: { padding: scale(20) },
@@ -2087,7 +2088,7 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(24),
   },
   permBtn: {
-    backgroundColor: "#0D9488",
+    backgroundColor: Colors.primary,
     paddingHorizontal: scale(24),
     paddingVertical: verticalScale(12),
     borderRadius: 20,
@@ -2141,7 +2142,7 @@ const styles = StyleSheet.create({
     width: scale(36),
     height: scale(36),
     borderRadius: scale(18),
-    backgroundColor: "#F0FDFA",
+    backgroundColor: Colors.primaryBg,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2178,7 +2179,7 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(16),
   },
   primaryBtn: {
-    backgroundColor: "#0D9488",
+    backgroundColor: Colors.primary,
     paddingVertical: verticalScale(14),
     borderRadius: 14,
     alignItems: "center",
@@ -2278,7 +2279,7 @@ const styles = StyleSheet.create({
   },
   usageText: {
     fontSize: moderateScale(16),
-    color: "#334155",
+    color: Colors.primaryDark,
     lineHeight: 24,
     fontWeight: "500",
     textAlign: "justify",
@@ -2328,7 +2329,7 @@ const styles = StyleSheet.create({
     width: scale(38),
     height: scale(38),
     borderRadius: scale(19),
-    backgroundColor: "#F0FDFA",
+    backgroundColor: Colors.primaryBg,
     alignItems: "center",
     justifyContent: "center",
     marginRight: scale(12),
@@ -2400,7 +2401,7 @@ const styles = StyleSheet.create({
   },
   langChipText: {
     fontSize: moderateScale(14),
-    color: "#334155",
+    color: Colors.primaryDark,
     fontWeight: "600",
   },
   // Info Chip Row
@@ -2435,7 +2436,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: moderateScale(14),
     fontWeight: "600",
-    color: "#334155",
+    color: Colors.primaryDark,
     letterSpacing: 1.2,
   },
   bodyText: {
@@ -2684,7 +2685,7 @@ const styles = StyleSheet.create({
   genericName: {
     fontSize: moderateScale(18),
     fontWeight: "700",
-    color: "#334155",
+    color: Colors.primaryDark,
     marginBottom: 4,
     textAlign: "justify",
   },
@@ -2755,7 +2756,7 @@ const styles = StyleSheet.create({
   govAssistContact: {
     fontSize: moderateScale(14),
     fontWeight: "600",
-    color: "#0D9488",
+    color: Colors.primary,
   },
   philhealthCard: {
     flexDirection: "row",
@@ -2780,7 +2781,7 @@ const styles = StyleSheet.create({
   },
   primaryBtnRow: {
     flex: 1,
-    backgroundColor: "#334155",
+    backgroundColor: Colors.primaryDark,
     paddingVertical: verticalScale(14),
     borderRadius: 14,
     alignItems: "center",
@@ -2793,7 +2794,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: scale(8),
-    backgroundColor: "#0D9488",
+    backgroundColor: Colors.primary,
     paddingVertical: verticalScale(14),
     borderRadius: 14,
     marginTop: verticalScale(16),

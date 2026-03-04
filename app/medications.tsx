@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
+import { Colors } from "../constants/Colors";
 import {
   deleteReminder,
   getAllReminders,
@@ -62,6 +63,7 @@ export default function MedicationsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterType>("week");
+  const [takenMeds, setTakenMeds] = useState<Set<string>>(new Set());
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -80,6 +82,19 @@ export default function MedicationsScreen() {
     setReminders(data);
     setRefreshing(false);
   }, []);
+
+  // Toggle medication as taken
+  const toggleMedicationTaken = (id: string) => {
+    setTakenMeds(prev => {
+      const updated = new Set(prev);
+      if (updated.has(id)) {
+        updated.delete(id);
+      } else {
+        updated.add(id);
+      }
+      return updated;
+    });
+  };
 
   // Filter reminders based on selected time range
   const filteredReminders = reminders.filter((r) => {
@@ -181,7 +196,7 @@ export default function MedicationsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={["#0D9488"]}
+            colors={[Colors.primary]}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -189,63 +204,79 @@ export default function MedicationsScreen() {
         {/* Today Label */}
         {filteredReminders.length > 0 && (
           <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>Today</Text>
-            <TouchableOpacity activeOpacity={0.7}>
-              <Text style={styles.viewAll}>View all</Text>
-            </TouchableOpacity>
+            <Text style={styles.sectionTitle}>This Week</Text>
+            <Text style={styles.reminderCount}>{filteredReminders.length}</Text>
           </View>
         )}
 
-        {/* Medicine Cards Grid */}
+        {/* Medication List View */}
         {filteredReminders.length > 0 ? (
-          <View style={styles.grid}>
-            {filteredReminders.map((reminder, index) => (
-              <Animated.View
-                key={reminder.id}
-                entering={FadeInUp.duration(400).delay(index * 80)}
-                style={styles.gridItem}
-              >
-                <TouchableOpacity
-                  style={[
-                    styles.medicineCard,
-                    { backgroundColor: reminder.color },
-                  ]}
-                  activeOpacity={0.85}
-                  onPress={() =>
-                    router.push({
+          <View style={styles.listContainer}>
+            {filteredReminders.map((reminder, index) => {
+              const isTaken = takenMeds.has(reminder.id);
+              return (
+                <Animated.View
+                  key={reminder.id}
+                  entering={FadeInUp.duration(400).delay(index * 80)}
+                >
+                  <TouchableOpacity
+                    style={[styles.medicineListItem, isTaken && styles.medicineListItemTaken]}
+                    activeOpacity={0.7}
+                    onPress={() => router.push({
                       pathname: "/add-schedule",
                       params: { editId: reminder.id },
-                    })
-                  }
-                  onLongPress={() =>
-                    handleDelete(reminder.id, reminder.medicineName)
-                  }
-                >
-                  <Text style={styles.cardEmoji}>
-                    {getMedicineEmoji(reminder.medicineName)}
-                  </Text>
-                  <Text style={styles.cardName} numberOfLines={1}>
-                    {reminder.medicineName}
-                  </Text>
-                  <Text style={styles.cardFreq}>
-                    {getFrequencyLabel(reminder.frequency)}
-                  </Text>
-                  {reminder.reminderTime ? (
-                    <View style={styles.cardTimeRow}>
-                      <Ionicons name="time-outline" size={12} color="#64748B" />
-                      <Text style={styles.cardTime}>
-                        {reminder.reminderTime}
-                      </Text>
+                    })}
+                  >
+                    {/* Checkbox */}
+                    <TouchableOpacity
+                      style={[styles.checkbox, isTaken && styles.checkboxChecked]}
+                      onPress={() => toggleMedicationTaken(reminder.id)}
+                      activeOpacity={0.7}
+                    >
+                      {isTaken && (
+                        <Ionicons name="checkmark-sharp" size={16} color="#FFF" />
+                      )}
+                    </TouchableOpacity>
+
+                    {/* Rx Badge */}
+                    <View style={styles.rxBadge}>
+                      <Text style={styles.rxText}>Rx</Text>
                     </View>
-                  ) : null}
-                </TouchableOpacity>
-              </Animated.View>
-            ))}
+
+                    {/* Medicine Info */}
+                    <View style={styles.medicineInfo}>
+                      <View style={styles.medicineNameRow}>
+                        <Text style={styles.medicineName} numberOfLines={1}>
+                          {reminder.medicineName}
+                        </Text>
+                        {/* Status Badge */}
+                        <View style={[styles.statusBadge, isTaken && styles.statusBadgeTaken]}>
+                          <Text style={[styles.statusLabel, isTaken && styles.statusLabelTaken]}>
+                            {reminder.dose ? 'Caution' : 'Info'}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.medicineDetails} numberOfLines={2}>
+                        {reminder.dose ? `${reminder.dose} ${reminder.measurement}` : 'No dosage'} • {getFrequencyLabel(reminder.frequency)}
+                      </Text>
+                      <View style={styles.medicineFooter}>
+                        {reminder.reminderTime && (
+                          <Text style={styles.medicineTime}>
+                            {reminder.reminderTime}
+                          </Text>
+                        )}
+                        <Text style={styles.dayLabel}>Thu</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                </Animated.View>
+              );
+            })}
           </View>
         ) : (
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
-              <Ionicons name="alarm-outline" size={56} color="#0D9488" />
+              <Ionicons name="alarm-outline" size={56} color={Colors.primary} />
             </View>
             <Text style={styles.emptyTitle}>No Reminders Yet</Text>
             <Text style={styles.emptySub}>
@@ -273,19 +304,19 @@ export default function MedicationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F8FAFC" },
+  root: { flex: 1, backgroundColor: Colors.background },
   header: {
     paddingTop: verticalScale(48),
     paddingBottom: verticalScale(16),
     paddingHorizontal: scale(20),
-    backgroundColor: "#F8FAFC",
+    backgroundColor: Colors.background,
   },
   headerRow: { flexDirection: "row", alignItems: "center", gap: scale(14) },
   headerBtn: {
     width: scale(44),
     height: scale(44),
     borderRadius: 14,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -312,15 +343,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(18),
     paddingVertical: verticalScale(10),
     borderRadius: 20,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Colors.surface,
   },
   filterTabActive: {
-    backgroundColor: "#0D9488",
+    backgroundColor: Colors.primary,
   },
   filterTabText: {
     fontSize: moderateScale(13),
     fontWeight: "600",
-    color: "#64748B",
+    color: Colors.textSecondary,
   },
   filterTabTextActive: {
     color: "#FFFFFF",
@@ -341,9 +372,133 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#1E293B",
   },
-  viewAll: { fontSize: moderateScale(14), fontWeight: "600", color: "#0D9488" },
+  reminderCount: {
+    fontSize: moderateScale(16),
+    fontWeight: "700",
+    color: Colors.primary,
+    backgroundColor: Colors.primaryBg,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(4),
+    borderRadius: 20,
+  },
+  viewAll: { fontSize: moderateScale(14), fontWeight: "600", color: Colors.primary },
 
-  // Grid
+  // List View
+  listContainer: {
+    gap: verticalScale(12),
+    marginBottom: verticalScale(20),
+  },
+  medicineListItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: scale(12),
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(12),
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  medicineListItemTaken: {
+    opacity: 0.65,
+    backgroundColor: Colors.primaryBg,
+    borderColor: Colors.border,
+    borderWidth: 1,
+  },
+  checkbox: {
+    width: scale(28),
+    height: scale(28),
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: '#FFF',
+    flexShrink: 0,
+  },
+  checkboxChecked: {
+    backgroundColor: Colors.success,
+    borderColor: Colors.success,
+    borderWidth: 2,
+  },
+  rxBadge: {
+    width: scale(36),
+    height: scale(36),
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rxText: {
+    fontSize: moderateScale(14),
+    fontWeight: "800",
+    color: "#FFF",
+  },
+  medicineInfo: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  medicineNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: verticalScale(6),
+    gap: scale(8),
+  },
+  medicineName: {
+    fontSize: moderateScale(14),
+    fontWeight: "700",
+    color: Colors.textPrimary,
+    flex: 1,
+  },
+  medicineDetails: {
+    fontSize: moderateScale(12),
+    fontWeight: "500",
+    color: Colors.textSecondary,
+    marginBottom: verticalScale(6),
+    lineHeight: 16,
+  },
+  medicineFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  medicineTime: {
+    fontSize: moderateScale(11),
+    fontWeight: "600",
+    color: Colors.primary,
+  },
+  dayLabel: {
+    fontSize: moderateScale(11),
+    fontWeight: "600",
+    color: Colors.textTertiary,
+  },
+  statusBadge: {
+    paddingHorizontal: scale(8),
+    paddingVertical: verticalScale(3),
+    borderRadius: 6,
+    backgroundColor: Colors.warningBg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statusBadgeTaken: {
+    backgroundColor: Colors.successBg,
+  },
+  statusLabel: {
+    fontSize: moderateScale(10),
+    fontWeight: "700",
+    color: Colors.warning,
+  },
+  statusLabelTaken: {
+    color: Colors.success,
+  },
+
+  // Grid (kept for reference but not used)
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -373,7 +528,7 @@ const styles = StyleSheet.create({
   cardFreq: {
     fontSize: moderateScale(12),
     fontWeight: "600",
-    color: "#0D9488",
+    color: Colors.primary,
   },
   cardTimeRow: {
     flexDirection: "row",
@@ -399,7 +554,7 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 24,
-    backgroundColor: "#F0FDFA",
+    backgroundColor: Colors.primaryBg,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -427,11 +582,11 @@ const styles = StyleSheet.create({
   fab: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0D9488",
+    backgroundColor: Colors.primary,
     paddingHorizontal: scale(28),
     paddingVertical: verticalScale(16),
     borderRadius: 28,
-    shadowColor: "#0D9488",
+    shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 16,

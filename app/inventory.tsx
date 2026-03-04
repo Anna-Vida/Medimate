@@ -19,6 +19,7 @@ import {
     MedicationRecord,
 } from "../services/medicationStorage";
 import { moderateScale, scale, verticalScale } from "../utils/responsive";
+import { Colors } from "../constants/Colors";
 
 export default function InventoryScreen() {
     const router = useRouter();
@@ -70,22 +71,22 @@ export default function InventoryScreen() {
         if (daysLeft <= 0)
             return {
                 label: "Out of Stock",
-                color: "#DC2626",
-                bgColor: "#FEF2F2",
+                color: Colors.error,
+                bgColor: Colors.errorBg,
                 icon: "close-circle" as const,
             };
         if (daysLeft <= 3)
             return {
                 label: "Low Stock",
-                color: "#F59E0B",
-                bgColor: "#FFFBEB",
+                color: Colors.warning,
+                bgColor: Colors.warningBg,
                 icon: "warning" as const,
             };
         if (daysLeft <= 7)
             return {
                 label: "Moderate",
-                color: "#0D9488",
-                bgColor: "#F0FDFA",
+                color: Colors.primary,
+                bgColor: Colors.primaryBg,
                 icon: "checkmark-circle" as const,
             };
         return {
@@ -117,8 +118,8 @@ export default function InventoryScreen() {
                     entering={FadeInUp.duration(400)}
                     style={styles.summaryRow}
                 >
-                    <View style={[styles.summaryCard, { backgroundColor: "#F0FDFA" }]}>
-                        <Text style={[styles.summaryNum, { color: "#0D9488" }]}>
+                    <View style={[styles.summaryCard, { backgroundColor: Colors.primaryBg }]}>
+                        <Text style={[styles.summaryNum, { color: Colors.primaryDark }]}>
                             {totalPills}
                         </Text>
                         <Text style={styles.summaryLabel}>Total Pills</Text>
@@ -148,7 +149,7 @@ export default function InventoryScreen() {
                     <RefreshControl
                         refreshing={refreshing}
                         onRefresh={onRefresh}
-                        colors={["#0D9488"]}
+                        colors={[Colors.primary]}
                     />
                 }
                 showsVerticalScrollIndicator={false}
@@ -201,7 +202,7 @@ export default function InventoryScreen() {
                                             <Text
                                                 style={[
                                                     styles.statNum,
-                                                    daysLeft <= 3 && { color: "#DC2626" },
+                                                    daysLeft <= 3 && { color: Colors.error },
                                                 ]}
                                             >
                                                 {count}
@@ -213,7 +214,7 @@ export default function InventoryScreen() {
                                             <Text
                                                 style={[
                                                     styles.statNum,
-                                                    daysLeft <= 3 && { color: "#DC2626" },
+                                                    daysLeft <= 3 && { color: Colors.error },
                                                 ]}
                                             >
                                                 {daysLeft}
@@ -246,7 +247,7 @@ export default function InventoryScreen() {
                                     {/* Low stock warning */}
                                     {daysLeft <= 3 && daysLeft > 0 && (
                                         <View style={styles.warningBanner}>
-                                            <Ionicons name="warning" size={16} color="#F59E0B" />
+                                            <Ionicons name="warning" size={16} color={Colors.warning} />
                                             <Text style={styles.warningText}>
                                                 Restock soon — only {daysLeft} day
                                                 {daysLeft !== 1 ? "s" : ""} left!
@@ -257,11 +258,11 @@ export default function InventoryScreen() {
                                         <View
                                             style={[
                                                 styles.warningBanner,
-                                                { backgroundColor: "#FEF2F2" },
+                                                { backgroundColor: Colors.errorBg },
                                             ]}
                                         >
-                                            <Ionicons name="close-circle" size={16} color="#DC2626" />
-                                            <Text style={[styles.warningText, { color: "#DC2626" }]}>
+                                            <Ionicons name="close-circle" size={16} color={Colors.error} />
+                                            <Text style={[styles.warningText, { color: Colors.error }]}>
                                                 Out of stock! Please refill immediately.
                                             </Text>
                                         </View>
@@ -272,13 +273,8 @@ export default function InventoryScreen() {
                                         <TouchableOpacity
                                             style={styles.takeBtn}
                                             onPress={() => handleTakeDose(med)}
-                                            activeOpacity={0.8}
                                         >
-                                            <Ionicons
-                                                name="checkmark-circle"
-                                                size={18}
-                                                color="#FFF"
-                                            />
+                                            <Ionicons name="medical" size={18} color="#FFF" />
                                             <Text style={styles.takeBtnText}>Take Dose</Text>
                                         </TouchableOpacity>
                                     )}
@@ -289,7 +285,7 @@ export default function InventoryScreen() {
                 ) : (
                     <View style={styles.emptyState}>
                         <View style={styles.emptyIcon}>
-                            <Ionicons name="cube-outline" size={56} color="#0D9488" />
+                            <Ionicons name="cube-outline" size={56} color={Colors.primary} />
                         </View>
                         <Text style={styles.emptyTitle}>No Inventory Yet</Text>
                         <Text style={styles.emptySub}>
@@ -306,30 +302,30 @@ export default function InventoryScreen() {
 }
 
 const styles = StyleSheet.create({
-    root: { flex: 1, backgroundColor: "#F8FAFC" },
+    root: { flex: 1, backgroundColor: Colors.background },
     header: {
         paddingTop: verticalScale(48),
         paddingBottom: verticalScale(12),
         paddingHorizontal: scale(20),
-        backgroundColor: "#F8FAFC",
+        backgroundColor: Colors.background,
     },
     headerRow: { flexDirection: "row", alignItems: "center", gap: scale(14) },
     headerBtn: {
         width: scale(44),
         height: scale(44),
         borderRadius: 14,
-        backgroundColor: "#F1F5F9",
+        backgroundColor: Colors.surfaceHighlight,
         alignItems: "center",
         justifyContent: "center",
     },
     headerTitle: {
         fontSize: moderateScale(22),
         fontWeight: "700",
-        color: "#1E293B",
+        color: Colors.textPrimary,
     },
     headerSub: {
         fontSize: moderateScale(14),
-        color: "#64748B",
+        color: Colors.textSecondary,
         fontWeight: "500",
         marginTop: 2,
     },
@@ -352,7 +348,7 @@ const styles = StyleSheet.create({
     summaryLabel: {
         fontSize: moderateScale(11),
         fontWeight: "600",
-        color: "#64748B",
+        color: Colors.textSecondary,
         marginTop: 2,
     },
 
@@ -361,7 +357,7 @@ const styles = StyleSheet.create({
 
     // Medicine Card
     medCard: {
-        backgroundColor: "#FFFFFF",
+        backgroundColor: Colors.surface,
         borderRadius: 20,
         padding: scale(18),
         marginBottom: verticalScale(14),
@@ -376,10 +372,10 @@ const styles = StyleSheet.create({
         justifyContent: "space-between",
         marginBottom: 14,
     },
-    medName: { fontSize: moderateScale(17), fontWeight: "700", color: "#1E293B" },
+    medName: { fontSize: moderateScale(17), fontWeight: "700", color: Colors.textPrimary },
     medDosage: {
         fontSize: moderateScale(13),
-        color: "#64748B",
+        color: Colors.textSecondary,
         fontWeight: "500",
         marginTop: 2,
     },
@@ -401,19 +397,19 @@ const styles = StyleSheet.create({
         marginBottom: 14,
     },
     statItem: { alignItems: "center", flex: 1 },
-    statNum: { fontSize: moderateScale(26), fontWeight: "800", color: "#1E293B" },
+    statNum: { fontSize: moderateScale(26), fontWeight: "800", color: Colors.textPrimary },
     statLabel: {
         fontSize: moderateScale(11),
         fontWeight: "600",
-        color: "#94A3B8",
+        color: Colors.textTertiary,
         marginTop: 2,
     },
-    statDivider: { width: 1, height: 36, backgroundColor: "#F1F5F9" },
+    statDivider: { width: 1, height: 36, backgroundColor: Colors.surfaceHighlight },
 
     // Progress
     progressBg: {
         height: 6,
-        backgroundColor: "#F1F5F9",
+        backgroundColor: Colors.surfaceHighlight,
         borderRadius: 3,
         marginBottom: 12,
         overflow: "hidden",
@@ -425,7 +421,7 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         gap: 8,
-        backgroundColor: "#FFFBEB",
+        backgroundColor: Colors.warningBg,
         paddingHorizontal: 12,
         paddingVertical: 10,
         borderRadius: 12,
@@ -444,7 +440,7 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "center",
         gap: 8,
-        backgroundColor: "#0D9488",
+        backgroundColor: Colors.primary,
         paddingVertical: verticalScale(12),
         borderRadius: 14,
     },
@@ -466,18 +462,18 @@ const styles = StyleSheet.create({
         width: 88,
         height: 88,
         borderRadius: 24,
-        backgroundColor: "#F0FDFA",
+        backgroundColor: Colors.primaryBg,
         alignItems: "center",
         justifyContent: "center",
     },
     emptyTitle: {
         fontSize: moderateScale(20),
         fontWeight: "700",
-        color: "#1E293B",
+        color: Colors.textPrimary,
     },
     emptySub: {
         fontSize: moderateScale(14),
-        color: "#94A3B8",
+        color: Colors.textTertiary,
         textAlign: "center",
         paddingHorizontal: 40,
     },

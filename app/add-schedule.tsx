@@ -21,6 +21,7 @@ import {
   updateReminder,
 } from "../services/medicationStorage";
 import { moderateScale, scale, verticalScale } from "../utils/responsive";
+import { Colors } from "../constants/Colors";
 
 const FREQUENCIES = [
   "Everyday",
@@ -288,7 +289,7 @@ export default function AddScheduleScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#F8FAFC" },
+  root: { flex: 1, backgroundColor: Colors.background },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -296,13 +297,13 @@ const styles = StyleSheet.create({
     paddingTop: verticalScale(48),
     paddingBottom: verticalScale(16),
     paddingHorizontal: scale(20),
-    backgroundColor: "#F8FAFC",
+    backgroundColor: Colors.background,
   },
   headerBtn: {
     width: scale(44),
     height: scale(44),
     borderRadius: 14,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: Colors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -364,7 +365,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#F8FAFC",
   },
   pickerOptionActive: {
-    backgroundColor: "#F0FDFA",
+    backgroundColor: Colors.primaryBg,
   },
   pickerOptionText: {
     fontSize: moderateScale(14),
@@ -372,7 +373,7 @@ const styles = StyleSheet.create({
     color: "#64748B",
   },
   pickerOptionTextActive: {
-    color: "#0D9488",
+    color: Colors.primary,
     fontWeight: "700",
   },
 
@@ -391,11 +392,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: scale(10),
-    backgroundColor: "#0D9488",
+    backgroundColor: Colors.primary,
     paddingVertical: verticalScale(18),
     borderRadius: 20,
     marginTop: verticalScale(32),
-    shadowColor: "#0D9488",
+    shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.25,
     shadowRadius: 12,

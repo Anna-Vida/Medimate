@@ -589,3 +589,57 @@ Respond ONLY with JSON (no markdown, no backticks):
         return fallback;
     }
 }
+
+export async function checkDrugInteraction(medicine1: string, medicine2: string): Promise<any> {
+    const fallback = {
+        isSafe: true,
+        interaction: 'Unable to determine interaction at this time',
+        sidesEffects: [],
+        recommendation: 'Please consult with a healthcare professional for personalized advice'
+    };
+
+    try {
+        if (!API_KEY) {
+            console.error('Gemini API key not configured');
+            throw new Error('API key missing');
+        }
+
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+        const prompt = `You are a clinical pharmacist AI. Check the drug interaction between "${medicine1}" and "${medicine2}".
+
+Provide a response with:
+1. Is it safe to take both medicines together? (true/false)
+2. Brief description of the interaction
+3. 3-5 possible side effects when taken together
+4. Clinical recommendation
+
+Respond ONLY with valid JSON (no markdown, no backticks):
+{
+  "isSafe": boolean,
+  "interaction": "brief description",
+  "sidesEffects": ["effect1", "effect2", "effect3"],
+  "recommendation": "recommendation"
+}`;
+
+        const result = await model.generateContent(prompt);
+        const text = result.response.text().trim();
+        
+        // Remove markdown code blocks if present
+        let jsonText = text;
+        if (jsonText.includes('```')) {
+            jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        }
+        
+        const parsed = JSON.parse(jsonText);
+        
+        return {
+            isSafe: parsed.isSafe ?? fallback.isSafe,
+            interaction: parsed.interaction ?? fallback.interaction,
+            sidesEffects: Array.isArray(parsed.sidesEffects) ? parsed.sidesEffects.filter(Boolean) : fallback.sidesEffects,
+            recommendation: parsed.recommendation ?? fallback.recommendation
+        };
+    } catch (err) {
+        console.error('Drug interaction check error:', err);
+        return fallback;
+    }
+}

@@ -1,4 +1,5 @@
 {
+  "$schema": "./.vscode/schemas/expo-xdl.json",
   "expo": {
     "name": "MediMate",
     "slug": "MediMate",
@@ -7,7 +8,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "medimate",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -22,7 +22,6 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.anonymous.MediMate",
       "permissions": [
@@ -74,8 +73,7 @@
       ]
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     },
     "extra": {
       "router": {},

@@ -22,9 +22,13 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
+import * as AppTheme from "../../constants/Colors";
 import { moderateScale, scale, verticalScale } from "../../utils/responsive";
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+
+const Colors: any = (AppTheme as any).Colors ?? (AppTheme as any);
+const Shadows: any = (AppTheme as any).Shadows ?? {};
 
 export default function App() {
   const router = useRouter();
@@ -143,7 +147,7 @@ export default function App() {
       subtitle: "AI Medicine Identification",
       icon: "scan-circle",
       route: "/scanner" as const,
-      color: "#2DD4BF",
+      color: Colors.primary,
       status: "READY",
     },
     {
@@ -151,7 +155,7 @@ export default function App() {
       subtitle: "Track Your Medicines",
       icon: "list-circle",
       route: "/medications" as const,
-      color: "#2DD4BF",
+      color: Colors.primary,
       status: "ACTIVE",
     },
     {
@@ -159,18 +163,18 @@ export default function App() {
       subtitle: "Nearest Pharmacy Locator",
       icon: "location-outline",
       route: "/pharmacy-finder" as const,
-      color: "#2DD4BF",
+      color: Colors.primary,
       status: "NEAR YOU",
     },
   ];
 
-  const Content = (
+  const renderContent = () => (
     <>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
 
       {!isOnline && (
         <View style={styles.offlineBanner}>
-          <Ionicons name="wifi-outline" size={14} color="#FFF" />
+          <Ionicons name="wifi-outline" size={14} color={Colors.white} />
           <Text style={styles.offlineText}>
             No Internet — AI features unavailable
           </Text>
@@ -196,7 +200,7 @@ export default function App() {
             <Animated.View
               style={[
                 styles.statusDot,
-                { backgroundColor: isOnline ? "#10B981" : "#EF4444" },
+                { backgroundColor: isOnline ? Colors.success : Colors.error },
                 statusDotStyle,
               ]}
             />
@@ -212,7 +216,7 @@ export default function App() {
             <Ionicons
               name={currentLocation ? "location" : "location-outline"}
               size={12}
-              color="#64748B"
+              color={Colors.textSecondary}
             />
             <Text style={styles.locationText} numberOfLines={1}>
               {fetchingLocation
@@ -223,7 +227,7 @@ export default function App() {
                     ? "GPS Active"
                     : "GPS Off"}
             </Text>
-            <Ionicons name="chevron-forward" size={10} color="#94A3B8" />
+            <Ionicons name="chevron-forward" size={10} color={Colors.textTertiary} />
           </TouchableOpacity>
         </Animated.View>
       </View>
@@ -249,16 +253,16 @@ export default function App() {
             >
               <View style={styles.cardContent}>
                 <View
-                  style={[styles.iconContainer, { backgroundColor: "#F0FDFA" }]}
+                  style={[styles.iconContainer, { backgroundColor: Colors.primaryBg }]}
                 >
-                  <Ionicons name={item.icon as any} size={28} color="#0D9488" />
+                  <Ionicons name={item.icon as any} size={28} color={Colors.primary} />
                 </View>
                 <View style={styles.moduleInfo}>
                   <Text style={styles.moduleTitle}>{item.title}</Text>
                   <Text style={styles.moduleSubtitle}>{item.subtitle}</Text>
                 </View>
                 <View style={styles.arrowContainer}>
-                  <Ionicons name="chevron-forward" size={18} color="#CBD5E1" />
+                  <Ionicons name="chevron-forward" size={18} color={Colors.border} />
                 </View>
               </View>
             </AnimatedTouchable>
@@ -273,13 +277,13 @@ export default function App() {
             style={styles.modalCard}
           >
             <View style={styles.modalHeader}>
-              <View style={styles.modalIconBg}>
-                <Ionicons name="location" size={28} color="#FFFFFF" />
+              <View style={[styles.modalIconBg, { backgroundColor: Colors.primary }]}>
+                <Ionicons name="location" size={28} color={Colors.white} />
               </View>
               <Text style={styles.modalTitle}>LOCATION SERVICES</Text>
             </View>
             <View style={styles.addressCard}>
-              <Ionicons name="navigate-circle" size={24} color="#334155" />
+              <Ionicons name="navigate-circle" size={24} color={Colors.textSecondary} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.addressLabel}>CURRENT ADDRESS</Text>
                 <Text style={styles.addressText}>
@@ -292,7 +296,7 @@ export default function App() {
               onPress={openInGoogleMaps}
               activeOpacity={0.8}
             >
-              <Ionicons name="map-outline" size={20} color="#FFFFFF" />
+              <Ionicons name="map-outline" size={20} color={Colors.white} />
               <Text style={styles.btnMapsText}>OPEN IN MAPS</Text>
             </TouchableOpacity>
             <View style={styles.modalActions}>
@@ -301,7 +305,7 @@ export default function App() {
                 onPress={refreshLocation}
                 activeOpacity={0.8}
               >
-                <Ionicons name="refresh" size={18} color="#334155" />
+                <Ionicons name="refresh" size={18} color={Colors.primaryDark} />
                 <Text style={styles.btnRefreshText}>REFRESH</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -324,7 +328,7 @@ export default function App() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 96 }}
       >
-        {Content}
+        {renderContent()}
       </ScrollView>
     </SafeAreaView>
   );
@@ -333,13 +337,13 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: Colors.background,
   },
   headerSection: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Colors.surface,
     paddingBottom: verticalScale(20),
     borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    borderBottomColor: Colors.border,
   },
   header: {
     paddingHorizontal: scale(24),
@@ -352,25 +356,25 @@ const styles = StyleSheet.create({
   greetingText: {
     fontSize: moderateScale(14),
     fontWeight: "600",
-    color: "#0D9488",
+    color: Colors.primary,
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   brandLabel: {
     fontSize: moderateScale(28),
     fontWeight: "900",
-    color: "#1E293B",
+    color: Colors.textPrimary,
     letterSpacing: -1,
   },
   profileBtn: {
     width: scale(44),
     height: scale(44),
     borderRadius: 22,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: Colors.surfaceHighlight,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#F1F5F9",
+    borderColor: Colors.border,
   },
   statusRow: {
     flexDirection: "row",
@@ -384,9 +388,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(12),
     paddingVertical: verticalScale(8),
     borderRadius: 12,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: Colors.surfaceHighlight,
     borderWidth: 1,
-    borderColor: "#F1F5F9",
+    borderColor: Colors.border,
   },
   locationPill: {
     flexDirection: "row",
@@ -396,19 +400,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(12),
     paddingVertical: verticalScale(8),
     borderRadius: 12,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: Colors.surfaceHighlight,
     borderWidth: 1,
-    borderColor: "#F1F5F9",
+    borderColor: Colors.border,
   },
   statusText: {
     fontSize: moderateScale(12),
     fontWeight: "700",
-    color: "#475569",
+    color: Colors.textSecondary,
   },
   locationText: {
     fontSize: moderateScale(12),
     fontWeight: "600",
-    color: "#475569",
+    color: Colors.textSecondary,
     flex: 1,
   },
   statusDot: {
@@ -418,7 +422,7 @@ const styles = StyleSheet.create({
   },
   mainContent: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: Colors.background,
   },
   sectionHeader: {
     paddingHorizontal: scale(24),
@@ -428,7 +432,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: moderateScale(18),
     fontWeight: "700",
-    color: "#1E293B",
+    color: Colors.textPrimary,
     letterSpacing: -0.2,
   },
   gridContainer: {
@@ -436,16 +440,16 @@ const styles = StyleSheet.create({
     paddingTop: verticalScale(8),
   },
   moduleCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Colors.surface,
     borderRadius: 20,
     marginBottom: verticalScale(16),
     borderWidth: 1,
-    borderColor: "#F1F5F9",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.02,
-    shadowRadius: 10,
-    elevation: 2,
+    borderColor: Colors.border,
+    shadowColor: Shadows.small.shadowColor,
+    shadowOffset: Shadows.small.shadowOffset,
+    shadowOpacity: Shadows.small.shadowOpacity,
+    shadowRadius: Shadows.small.shadowRadius,
+    elevation: Shadows.small.elevation,
   },
   cardContent: {
     flexDirection: "row",
@@ -460,7 +464,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#F1F5F9",
+    borderColor: Colors.border,
   },
   moduleInfo: {
     flex: 1,
@@ -469,12 +473,12 @@ const styles = StyleSheet.create({
   moduleTitle: {
     fontSize: moderateScale(17),
     fontWeight: "700",
-    color: "#1E293B",
+    color: Colors.textPrimary,
   },
   moduleSubtitle: {
     fontSize: moderateScale(14),
     fontWeight: "500",
-    color: "#64748B",
+    color: Colors.textSecondary,
   },
   arrowContainer: {
     width: scale(32),
@@ -488,13 +492,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(30,41,59,0.4)",
+    backgroundColor: "rgba(15, 23, 42, 0.4)",
     justifyContent: "center",
     alignItems: "center",
     padding: scale(24),
   },
   modalCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Colors.surface,
     borderRadius: 28,
     padding: scale(32),
     width: "100%",
@@ -509,7 +513,7 @@ const styles = StyleSheet.create({
     width: scale(64),
     height: scale(64),
     borderRadius: 24,
-    backgroundColor: "#334155",
+    backgroundColor: Colors.textSecondary,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: verticalScale(4),
@@ -517,36 +521,36 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: moderateScale(16),
     fontWeight: "800",
-    color: "#1E293B",
+    color: Colors.textPrimary,
     letterSpacing: 1,
   },
   addressCard: {
     flexDirection: "row",
     alignItems: "flex-start",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: Colors.surfaceHighlight,
     padding: scale(20),
     borderRadius: 16,
     gap: scale(14),
     marginBottom: verticalScale(20),
     borderWidth: 1,
-    borderColor: "#F1F5F9",
+    borderColor: Colors.border,
   },
   addressLabel: {
     fontSize: moderateScale(11),
     fontWeight: "800",
-    color: "#64748B",
+    color: Colors.textSecondary,
     letterSpacing: 1,
     marginBottom: verticalScale(4),
   },
   addressText: {
     fontSize: moderateScale(15),
     fontWeight: "600",
-    color: "#1E293B",
+    color: Colors.textPrimary,
     lineHeight: 22,
   },
   btnMaps: {
     flexDirection: "row",
-    backgroundColor: "#334155",
+    backgroundColor: Colors.textSecondary,
     paddingVertical: verticalScale(18),
     borderRadius: 16,
     alignItems: "center",
@@ -557,7 +561,7 @@ const styles = StyleSheet.create({
   btnMapsText: {
     fontSize: moderateScale(15),
     fontWeight: "700",
-    color: "#FFFFFF",
+    color: Colors.white,
     letterSpacing: 0.5,
   },
   modalActions: {
@@ -567,34 +571,34 @@ const styles = StyleSheet.create({
   btnRefresh: {
     flex: 1,
     flexDirection: "row",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: Colors.surface,
     paddingVertical: verticalScale(16),
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     gap: scale(8),
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: Colors.border,
   },
   btnRefreshText: {
     fontSize: moderateScale(14),
     fontWeight: "700",
-    color: "#334155",
+    color: Colors.textSecondary,
   },
   btnClose: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: Colors.surfaceHighlight,
     paddingVertical: verticalScale(16),
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#F1F5F9",
+    borderColor: Colors.border,
   },
   btnCloseText: {
     fontSize: moderateScale(14),
     fontWeight: "700",
-    color: "#64748B",
+    color: Colors.textSecondary,
   },
   offlineBanner: {
     backgroundColor: "#EF4444",

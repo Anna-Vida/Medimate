@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    Modal,
     RefreshControl,
     SafeAreaView,
     ScrollView,
@@ -15,10 +16,24 @@ import {
     View
 } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
+import { Colors, Shadows } from '../constants/Colors';
+import { checkDrugInteraction } from '../services/gemini';
 import { clearScans, getRecentScans, SavedScan } from '../services/storage';
 import { moderateScale, scale, verticalScale } from '../utils/responsive';
 
 type SortType = 'newest' | 'oldest';
+
+interface SelectedMedicine {
+    name: string;
+    dosage?: string;
+}
+
+interface InteractionResult {
+    isSafe: boolean;
+    interaction: string;
+    sidesEffects: string[];
+    recommendation: string;
+}
 
 export default function ScanHistoryScreen() {
     const router = useRouter();
@@ -27,6 +42,10 @@ export default function ScanHistoryScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState<SortType>('newest');
+    const [selectedMeds, setSelectedMeds] = useState<SelectedMedicine[]>([]);
+    const [showInteractionModal, setShowInteractionModal] = useState(false);
+    const [interactionResult, setInteractionResult] = useState<InteractionResult | null>(null);
+    const [checkingInteraction, setCheckingInteraction] = useState(false);
 
     useEffect(() => { load(); }, []);
 
@@ -51,6 +70,50 @@ export default function ScanHistoryScreen() {
         ]);
     };
 
+    const handleMedicinePress = (medicineName: string, dosage?: string) => {
+        setSelectedMeds(prev => {
+            const exists = prev.some(m => m.name.toLowerCase() === medicineName.toLowerCase());
+            if (exists) {
+                return prev.filter(m => m.name.toLowerCase() !== medicineName.toLowerCase());
+            }
+            if (prev.length >= 2) {
+                Alert.alert('Limit Reached', 'Select up to 2 medicines to check interactions');
+                return prev;
+            }
+            return [...prev, { name: medicineName, dosage }];
+        });
+    };
+
+    const checkInteraction = async () => {
+        if (selectedMeds.length < 2) {
+            Alert.alert('Select Medicines', 'Please select 2 different medicines to check interactions');
+            return;
+        }
+
+        try {
+            setCheckingInteraction(true);
+            const result = await checkDrugInteraction(selectedMeds[0].name, selectedMeds[1].name);
+
+            if (!result || !result.interaction) {
+                Alert.alert('Error', 'Unable to check interaction. Please try again.');
+                return;
+            }
+
+            setInteractionResult(result);
+            setShowInteractionModal(true);
+        } catch (error) {
+            console.error('Interaction check error:', error);
+            Alert.alert('Error', 'Failed to check drug interactions. Please verify your medicines and try again.');
+        } finally {
+            setCheckingInteraction(false);
+        }
+    };
+
+    const clearSelection = () => {
+        setSelectedMeds([]);
+        setInteractionResult(null);
+    };
+
     const formatDate = (ts: number) => {
         const d = new Date(ts);
         const now = new Date();
@@ -68,11 +131,11 @@ export default function ScanHistoryScreen() {
     };
 
     const getStatusInfo = (warnings?: string) => {
-        if (!warnings || warnings === 'None') return { label: 'Safe', color: '#10B981', bg: '#ECFDF5' };
+        if (!warnings || warnings === 'None') return { label: 'Safe', color: Colors.success, bg: Colors.primaryBg };
         const w = warnings.toLowerCase();
-        if (w.includes('severe') || w.includes('stop')) return { label: 'Warning', color: '#DC2626', bg: '#FEF2F2' };
-        if (w.includes('caution') || w.includes('avoid')) return { label: 'Caution', color: '#F59E0B', bg: '#FFFBEB' };
-        return { label: 'Info', color: '#0D9488', bg: '#F0FDFA' };
+        if (w.includes('severe') || w.includes('stop')) return { label: 'Warning', color: Colors.error, bg: Colors.errorBg };
+        if (w.includes('caution') || w.includes('avoid')) return { label: 'Caution', color: Colors.warning, bg: Colors.warningBg };
+        return { label: 'Info', color: Colors.primary, bg: Colors.primaryBg };
     };
 
     const sorted = useMemo(() => {
@@ -123,10 +186,10 @@ export default function ScanHistoryScreen() {
                                 style={styles.headerAction}
                                 activeOpacity={0.7}
                             >
-                                <Ionicons name="swap-vertical" size={18} color="#0D9488" />
+                                <Ionicons name="swap-vertical" size={18} color={Colors.primary} />
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={handleClearAll} style={[styles.headerAction, { backgroundColor: '#FEF2F2' }]} activeOpacity={0.7}>
-                                <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                            <TouchableOpacity onPress={handleClearAll} style={[styles.headerAction, { backgroundColor: Colors.surfaceHighlight, borderColor: Colors.border, borderWidth: 1 }]} activeOpacity={0.7}>
+                                <Ionicons name="trash-outline" size={18} color={Colors.textSecondary} />
                             </TouchableOpacity>
                         </View>
                     )}
@@ -150,23 +213,55 @@ export default function ScanHistoryScreen() {
                         )}
                     </View>
                 )}
+
+                {/* Selected Medicines Bar */}
+                {selectedMeds.length > 0 && (
+                    <View style={styles.selectedBar}>
+                        <View style={styles.selectedMeds}>
+                            {selectedMeds.map((med, idx) => (
+                                <TouchableOpacity
+                                    key={idx}
+                                    style={styles.selectedMedBadge}
+                                    onPress={() => handleMedicinePress(med.name, med.dosage)}
+                                >
+                                    <Text style={styles.selectedMedText} numberOfLines={1}>{med.name}</Text>
+                                    <Ionicons name="close" size={14} color="#FFF" />
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                        <TouchableOpacity
+                            style={[styles.checkBtn, checkingInteraction && { opacity: 0.6 }]}
+                            onPress={checkInteraction}
+                            disabled={checkingInteraction}
+                        >
+                            {checkingInteraction ? (
+                                <ActivityIndicator size="small" color="#FFF" />
+                            ) : (
+                                <>
+                                    <Ionicons name="flask" size={16} color="#FFF" />
+                                    <Text style={styles.checkBtnText}>Check</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                )}
             </View>
 
             <ScrollView
                 style={styles.body}
                 contentContainerStyle={[styles.bodyContent, sorted.length === 0 && { flex: 1 }]}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0D9488']} />}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
                 showsVerticalScrollIndicator={false}
             >
                 {loading ? (
                     <View style={styles.emptyState}>
-                        <ActivityIndicator size="large" color="#0D9488" />
+                        <ActivityIndicator size="large" color={Colors.primary} />
                         <Text style={styles.emptyTitle}>Loading...</Text>
                     </View>
                 ) : scans.length === 0 ? (
                     <View style={styles.emptyState}>
                         <View style={styles.emptyIcon}>
-                            <Ionicons name="document-text-outline" size={48} color="#0D9488" />
+                            <Ionicons name="document-text-outline" size={48} color={Colors.primary} />
                         </View>
                         <Text style={styles.emptyTitle}>No Prescriptions Yet</Text>
                         <Text style={styles.emptySub}>Scan your first prescription to start tracking</Text>
@@ -215,14 +310,32 @@ export default function ScanHistoryScreen() {
 
                                                 {/* Medicine Info */}
                                                 <View style={styles.rxInfo}>
-                                                    {meds.map((m, mi) => (
-                                                        <View key={mi} style={mi > 0 ? { marginTop: 6 } : undefined}>
-                                                            <Text style={styles.rxName} numberOfLines={1}>{m.medicineName}</Text>
-                                                            {m.dosage ? (
-                                                                <Text style={styles.rxDosage} numberOfLines={1}>{m.dosage}</Text>
-                                                            ) : null}
-                                                        </View>
-                                                    ))}
+                                                    {meds.map((m, mi) => {
+                                                        const isSelected = selectedMeds.some(sm => sm.name.toLowerCase() === m.medicineName.toLowerCase());
+                                                        return (
+                                                            <TouchableOpacity
+                                                                key={mi}
+                                                                style={[styles.medRow, isSelected && styles.medRowSelected]}
+                                                                onPress={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleMedicinePress(m.medicineName, m.dosage);
+                                                                }}
+                                                                activeOpacity={0.6}
+                                                            >
+                                                                {isSelected && (
+                                                                    <View style={styles.checkmark}>
+                                                                        <Ionicons name="checkmark" size={12} color="#FFF" />
+                                                                    </View>
+                                                                )}
+                                                                <View>
+                                                                    <Text style={styles.rxName} numberOfLines={1}>{m.medicineName}</Text>
+                                                                    {m.dosage ? (
+                                                                        <Text style={styles.rxDosage} numberOfLines={1}>{m.dosage}</Text>
+                                                                    ) : null}
+                                                                </View>
+                                                            </TouchableOpacity>
+                                                        );
+                                                    })}
                                                     {meds.length > 2 && (
                                                         <Text style={styles.rxMore}>+{meds.length - 2} more</Text>
                                                     )}
@@ -233,7 +346,7 @@ export default function ScanHistoryScreen() {
                                                     {(() => {
                                                         const status = getStatusInfo(meds[0]?.warnings);
                                                         return (
-                                                            <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
+                                                            <View style={[styles.statusPill, { backgroundColor: status.bg, borderColor: status.color }]}>
                                                                 <View style={[styles.statusDot, { backgroundColor: status.color }]} />
                                                                 <Text style={[styles.statusLabel, { color: status.color }]}>{status.label}</Text>
                                                             </View>
@@ -252,6 +365,117 @@ export default function ScanHistoryScreen() {
 
                 <View style={{ height: verticalScale(40) }} />
             </ScrollView>
+
+            {/* Interaction Modal */}
+            <Modal
+                visible={showInteractionModal}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => {
+                    setShowInteractionModal(false);
+                    clearSelection();
+                }}
+            >
+                <SafeAreaView style={styles.modalContainer}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>Drug Interaction Check</Text>
+                        <TouchableOpacity
+                            onPress={() => {
+                                setShowInteractionModal(false);
+                                clearSelection();
+                            }}
+                            style={styles.modalClose}
+                        >
+                            <Ionicons name="close" size={24} color={Colors.textPrimary} />
+                        </TouchableOpacity>
+                    </View>
+
+                    {checkingInteraction ? (
+                        <View style={styles.loadingContainer}>
+                            <ActivityIndicator size="large" color={Colors.primary} />
+                            <Text style={styles.loadingText}>Checking drug interaction...</Text>
+                        </View>
+                    ) : interactionResult ? (
+                        <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+                            {/* Medicines */}
+                            <View style={styles.medicinesSection}>
+                                <Text style={styles.sectionTitle}>Selected Medicines</Text>
+                                <View style={styles.medicinesList}>
+                                    {selectedMeds.map((med, idx) => (
+                                        <View key={idx} style={styles.medicineCard}>
+                                            <Ionicons name="flask" size={20} color={Colors.primary} />
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.medName}>{med.name}</Text>
+                                                {med.dosage && <Text style={styles.medDosage}>{med.dosage}</Text>}
+                                            </View>
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+
+                            {/* Interaction Status */}
+                            <View style={[styles.statusSection, { backgroundColor: interactionResult.isSafe ? Colors.primaryBg : Colors.errorBg }]}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                    <View style={[styles.statusIcon, { backgroundColor: interactionResult.isSafe ? Colors.success : Colors.error }]}>
+                                        <Ionicons
+                                            name={interactionResult.isSafe ? 'checkmark' : 'warning'}
+                                            size={24}
+                                            color="#FFF"
+                                        />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.statusTitle}>
+                                            {interactionResult.isSafe ? 'Safe to Combine' : 'Interaction Detected'}
+                                        </Text>
+                                        <Text style={styles.statusSubtitle}>
+                                            {interactionResult.interaction}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </View>
+
+                            {/* Side Effects */}
+                            {interactionResult.sidesEffects.length > 0 && (
+                                <View style={styles.section}>
+                                    <Text style={styles.sectionTitle}>Possible Side Effects</Text>
+                                    <View style={styles.effectsList}>
+                                        {interactionResult.sidesEffects.map((effect, idx) => (
+                                            <View key={idx} style={styles.effectItem}>
+                                                <View style={styles.effectDot} />
+                                                <Text style={styles.effectText}>{effect}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                </View>
+                            )}
+
+                            {/* Recommendation */}
+                            <View style={styles.section}>
+                                <Text style={styles.sectionTitle}>Recommendation</Text>
+                                <View style={styles.recommendationBox}>
+                                    <Ionicons name="information-circle" size={20} color={Colors.primary} />
+                                    <Text style={styles.recommendationText}>{interactionResult.recommendation}</Text>
+                                </View>
+                            </View>
+
+                            {/* Action Buttons */}
+                            <View style={styles.actionButtons}>
+                                <TouchableOpacity
+                                    style={styles.checkAgainBtn}
+                                    onPress={() => {
+                                        setShowInteractionModal(false);
+                                        clearSelection();
+                                    }}
+                                >
+                                    <Text style={styles.checkAgainText}>Check Another Pair</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={{ height: verticalScale(20) }} />
+                        </ScrollView>
+                    ) : null}
+                </SafeAreaView>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -270,21 +494,22 @@ const styles = StyleSheet.create({
         flexDirection: 'row', alignItems: 'center',
         justifyContent: 'space-between', marginBottom: verticalScale(14),
     },
-    headerTitle: { fontSize: moderateScale(22), fontWeight: '700', color: '#1E293B' },
-    headerSub: { fontSize: moderateScale(13), fontWeight: '500', color: '#64748B', marginTop: 2 },
+    headerTitle: { fontSize: moderateScale(22), fontWeight: '700', color: Colors.textPrimary },
+    headerSub: { fontSize: moderateScale(13), fontWeight: '500', color: Colors.textSecondary, marginTop: 2 },
     headerAction: {
         width: scale(38), height: scale(38), borderRadius: 12,
-        backgroundColor: '#F0FDFA', alignItems: 'center', justifyContent: 'center',
+        backgroundColor: Colors.surfaceHighlight, alignItems: 'center', justifyContent: 'center',
     },
 
     // Search
     searchBar: {
         flexDirection: 'row', alignItems: 'center', gap: 10,
-        backgroundColor: '#FFFFFF', borderRadius: 14,
+        backgroundColor: Colors.white, borderRadius: 14,
         paddingHorizontal: scale(14), height: verticalScale(44),
+        borderWidth: 1, borderColor: Colors.border,
     },
     searchInput: {
-        flex: 1, fontSize: moderateScale(14), color: '#1E293B', fontWeight: '500',
+        flex: 1, fontSize: moderateScale(14), color: Colors.textPrimary, fontWeight: '500',
     },
 
     body: { flex: 1 },
@@ -292,16 +517,17 @@ const styles = StyleSheet.create({
 
     // Date Group Label
     dateLabel: {
-        fontSize: moderateScale(13), fontWeight: '700', color: '#94A3B8',
+        fontSize: moderateScale(13), fontWeight: '700', color: Colors.textTertiary,
         letterSpacing: 0.5, marginTop: verticalScale(12), marginBottom: verticalScale(8),
         marginLeft: scale(4), textTransform: 'uppercase',
     },
 
     // Prescription Card (groups scans under a single card)
     rxCard: {
-        backgroundColor: '#FFFFFF', borderRadius: 18,
+        backgroundColor: Colors.white, borderRadius: 18,
         marginBottom: verticalScale(8), overflow: 'hidden',
-        shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+        borderWidth: 1, borderColor: Colors.border,
+        shadowColor: Shadows.small?.shadowColor || '#000', shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.02, shadowRadius: 8, elevation: 1,
     },
 
@@ -311,34 +537,39 @@ const styles = StyleSheet.create({
         gap: scale(12),
     },
     rxRowBorder: {
-        borderBottomWidth: 1, borderBottomColor: '#F1F5F9',
+        borderBottomWidth: 1, borderBottomColor: Colors.surfaceHighlight,
     },
 
     // Rx symbol
     rxSymbol: {
         width: scale(36), height: scale(36), borderRadius: 10,
-        backgroundColor: '#F0FDFA', alignItems: 'center', justifyContent: 'center',
+        backgroundColor: Colors.primaryBg, alignItems: 'center', justifyContent: 'center',
     },
     rxText: {
-        fontSize: moderateScale(14), fontWeight: '800', color: '#0D9488',
+        fontSize: moderateScale(14), fontWeight: '800', color: Colors.primary,
         fontStyle: 'italic',
     },
 
     // Medicine info
     rxInfo: { flex: 1 },
-    rxName: { fontSize: moderateScale(15), fontWeight: '700', color: '#1E293B' },
-    rxDosage: { fontSize: moderateScale(12), fontWeight: '500', color: '#64748B', marginTop: 1 },
-    rxMore: { fontSize: moderateScale(12), fontWeight: '600', color: '#0D9488', marginTop: 4 },
+    rxName: { fontSize: moderateScale(15), fontWeight: '700', color: Colors.textPrimary },
+    rxDosage: { fontSize: moderateScale(12), fontWeight: '500', color: Colors.textSecondary, marginTop: 1 },
+    rxMore: { fontSize: moderateScale(12), fontWeight: '600', color: Colors.primary, marginTop: 4 },
 
     // Right side
-    rxRight: { alignItems: 'flex-end', gap: 4 },
+    rxRight: { alignItems: 'flex-end', gap: 6 },
     statusPill: {
-        flexDirection: 'row', alignItems: 'center', gap: 4,
-        paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: scale(10),
+        paddingVertical: verticalScale(5),
+        borderRadius: 12,
+        borderWidth: 1,
     },
-    statusDot: { width: 6, height: 6, borderRadius: 3 },
-    statusLabel: { fontSize: moderateScale(11), fontWeight: '700' },
-    rxTime: { fontSize: moderateScale(11), fontWeight: '500', color: '#94A3B8' },
+    statusDot: { width: 8, height: 8, borderRadius: 4 },
+    statusLabel: { fontSize: moderateScale(12), fontWeight: '700' },
+    rxTime: { fontSize: moderateScale(11), fontWeight: '500', color: Colors.textTertiary },
 
     // Empty State
     emptyState: {
@@ -347,14 +578,242 @@ const styles = StyleSheet.create({
     },
     emptyIcon: {
         width: 80, height: 80, borderRadius: 22,
-        backgroundColor: '#F0FDFA', alignItems: 'center', justifyContent: 'center',
+        backgroundColor: Colors.primaryBg, alignItems: 'center', justifyContent: 'center',
     },
-    emptyTitle: { fontSize: moderateScale(18), fontWeight: '700', color: '#1E293B' },
-    emptySub: { fontSize: moderateScale(14), color: '#94A3B8', fontWeight: '500', textAlign: 'center', paddingHorizontal: 40 },
+    emptyTitle: { fontSize: moderateScale(18), fontWeight: '700', color: Colors.textPrimary },
+    emptySub: { fontSize: moderateScale(14), color: Colors.textTertiary, fontWeight: '500', textAlign: 'center', paddingHorizontal: 40 },
     emptyBtn: {
         flexDirection: 'row', alignItems: 'center', gap: 8,
-        backgroundColor: '#0D9488', paddingHorizontal: scale(24),
+        backgroundColor: Colors.primary, paddingHorizontal: scale(24),
         paddingVertical: verticalScale(12), borderRadius: 14, marginTop: 8,
     },
     emptyBtnText: { color: '#FFF', fontWeight: '700', fontSize: moderateScale(15) },
+
+    // Selected Medicines Bar
+    selectedBar: {
+        backgroundColor: Colors.primary,
+        paddingHorizontal: scale(16),
+        paddingVertical: verticalScale(12),
+        marginTop: verticalScale(8),
+        borderRadius: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: scale(8),
+        justifyContent: 'space-between',
+    },
+    selectedMeds: {
+        flex: 1,
+        flexDirection: 'row',
+        gap: scale(8),
+        flexWrap: 'wrap',
+        alignItems: 'center',
+    },
+    selectedMedBadge: {
+        backgroundColor: 'rgba(255,255,255,0.25)',
+        paddingHorizontal: scale(10),
+        paddingVertical: verticalScale(6),
+        borderRadius: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: scale(6),
+        maxWidth: '70%',
+    },
+    selectedMedText: {
+        color: '#FFF',
+        fontWeight: '600',
+        fontSize: moderateScale(12),
+        flexShrink: 1,
+    },
+    checkBtn: {
+        backgroundColor: 'rgba(255,255,255,0.3)',
+        paddingHorizontal: scale(14),
+        paddingVertical: verticalScale(8),
+        borderRadius: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: scale(4),
+        minWidth: scale(70),
+        justifyContent: 'center',
+    },
+    checkBtnText: {
+        color: '#FFF',
+        fontWeight: '700',
+        fontSize: moderateScale(12),
+    },
+    medRow: {
+        paddingVertical: verticalScale(6),
+        paddingHorizontal: scale(8),
+        borderRadius: 8,
+        marginBottom: verticalScale(6),
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: scale(8),
+    },
+    medRowSelected: {
+        backgroundColor: 'rgba(59, 130, 246, 0.05)',
+    },
+    checkmark: {
+        width: scale(18),
+        height: scale(18),
+        borderRadius: 9,
+        backgroundColor: Colors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    // Modal Styles
+    modalContainer: {
+        flex: 1,
+        backgroundColor: Colors.background,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: scale(20),
+        paddingVertical: verticalScale(16),
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.border,
+    },
+    modalTitle: {
+        fontSize: moderateScale(18),
+        fontWeight: '800',
+        color: Colors.textPrimary,
+    },
+    modalClose: {
+        width: scale(40),
+        height: scale(40),
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    modalContent: {
+        flex: 1,
+        paddingHorizontal: scale(20),
+        paddingTop: verticalScale(16),
+    },
+    loadingContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: verticalScale(16),
+    },
+    loadingText: {
+        fontSize: moderateScale(16),
+        fontWeight: '600',
+        color: Colors.textPrimary,
+    },
+    medicinesSection: {
+        marginBottom: verticalScale(24),
+    },
+    medicinesList: {
+        gap: verticalScale(10),
+    },
+    medicineCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.surface,
+        padding: scale(14),
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        gap: scale(12),
+    },
+    medName: {
+        fontSize: moderateScale(14),
+        fontWeight: '700',
+        color: Colors.textPrimary,
+    },
+    medDosage: {
+        fontSize: moderateScale(12),
+        color: Colors.textSecondary,
+        marginTop: 2,
+    },
+    statusSection: {
+        padding: scale(16),
+        borderRadius: 12,
+        marginBottom: verticalScale(20),
+    },
+    statusIcon: {
+        width: scale(48),
+        height: scale(48),
+        borderRadius: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    statusTitle: {
+        fontSize: moderateScale(15),
+        fontWeight: '800',
+        color: Colors.textPrimary,
+        marginBottom: verticalScale(4),
+    },
+    statusSubtitle: {
+        fontSize: moderateScale(13),
+        fontWeight: '500',
+        color: Colors.textSecondary,
+        lineHeight: 18,
+    },
+    section: {
+        marginBottom: verticalScale(24),
+    },
+    sectionTitle: {
+        fontSize: moderateScale(15),
+        fontWeight: '800',
+        color: Colors.textPrimary,
+        marginBottom: verticalScale(10),
+    },
+    effectsList: {
+        gap: verticalScale(8),
+    },
+    effectItem: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        backgroundColor: Colors.surface,
+        padding: scale(12),
+        borderRadius: 10,
+        gap: scale(10),
+    },
+    effectDot: {
+        width: scale(6),
+        height: scale(6),
+        borderRadius: 3,
+        backgroundColor: Colors.primary,
+        marginTop: verticalScale(6),
+    },
+    effectText: {
+        flex: 1,
+        fontSize: moderateScale(13),
+        fontWeight: '500',
+        color: Colors.textPrimary,
+        lineHeight: 18,
+    },
+    recommendationBox: {
+        flexDirection: 'row',
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        padding: scale(14),
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: Colors.primary,
+        gap: scale(10),
+    },
+    recommendationText: {
+        flex: 1,
+        fontSize: moderateScale(13),
+        fontWeight: '500',
+        color: Colors.textPrimary,
+        lineHeight: 18,
+    },
+    actionButtons: {
+        gap: verticalScale(10),
+    },
+    checkAgainBtn: {
+        backgroundColor: Colors.primary,
+        paddingVertical: verticalScale(14),
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    checkAgainText: {
+        color: '#FFF',
+        fontWeight: '800',
+        fontSize: moderateScale(14),
+    },
 });

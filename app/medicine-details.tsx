@@ -21,13 +21,17 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Colors } from "../constants/Colors";
 import {
   MedicineAnalysis,
   translateBatch,
   translateText,
 } from "../services/gemini";
 import { LANGUAGES, Language } from "../services/languages";
-import { getActiveMedications, updateMedicationInventory } from "../services/medicationStorage";
+import {
+  getActiveMedications,
+  updateMedicationInventory,
+} from "../services/medicationStorage";
 import { SavedScan } from "../services/storage";
 import { moderateScale, scale, verticalScale } from "../utils/responsive";
 
@@ -41,7 +45,7 @@ export default function MedicineDetailsScreen() {
   const meds: MedicineAnalysis[] = useMemo(
     () =>
       params.medicineData ? JSON.parse(params.medicineData as string) : [],
-    [params.medicineData]
+    [params.medicineData],
   );
 
   const [speakingField, setSpeakingField] = useState<string | null>(null);
@@ -49,7 +53,15 @@ export default function MedicineDetailsScreen() {
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
   const [translatedMeds, setTranslatedMeds] = useState<
-    Record<number, { name: string; purpose: string; warnings: string }>
+    Record<
+      number,
+      {
+        name: string;
+        purpose: string;
+        warnings: string;
+        simpleInstructions?: string;
+      }
+    >
   >({});
 
   // Inventory State
@@ -57,7 +69,9 @@ export default function MedicineDetailsScreen() {
   const [editingMedIndex, setEditingMedIndex] = useState<number | null>(null);
   const [inventoryInput, setInventoryInput] = useState("");
   const [doseInput, setDoseInput] = useState("");
-  const [inventoryData, setInventoryData] = useState<Record<string, { count: number; daily: number }>>({});
+  const [inventoryData, setInventoryData] = useState<
+    Record<string, { count: number; daily: number }>
+  >({});
 
   // Load saved inventory data on mount
   useEffect(() => {
@@ -75,7 +89,7 @@ export default function MedicineDetailsScreen() {
         }
         setInventoryData(data);
       } catch (e) {
-        console.warn('Failed to load inventory', e);
+        console.warn("Failed to load inventory", e);
       }
     };
     loadInventory();
@@ -95,7 +109,7 @@ export default function MedicineDetailsScreen() {
       try {
         const translations = await translateBatch(
           meds,
-          selectedLang.geminiName
+          selectedLang.geminiName,
         );
         if (!cancelled) {
           const map: Record<
@@ -123,7 +137,11 @@ export default function MedicineDetailsScreen() {
   if (!scan || meds.length === 0) {
     return (
       <View style={styles.emptyContainer}>
-        <Ionicons name="alert-circle-outline" size={64} color="#94A3B8" />
+        <Ionicons
+          name="alert-circle-outline"
+          size={64}
+          color={Colors.textTertiary}
+        />
         <Text style={styles.emptyText}>No medicine data found.</Text>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Text style={styles.backBtnText}>Go Back</Text>
@@ -181,7 +199,7 @@ export default function MedicineDetailsScreen() {
       if (newStatus !== "granted") {
         Alert.alert(
           "Permission Required",
-          "Please enable notifications to set reminders."
+          "Please enable notifications to set reminders.",
         );
         return;
       }
@@ -200,14 +218,14 @@ export default function MedicineDetailsScreen() {
           text: "Set for 8:00 PM",
           onPress: () => scheduleSimpleReminder(medicine.medicineName, 20, 0),
         },
-      ]
+      ],
     );
   };
 
   const scheduleSimpleReminder = async (
     name: string,
     hours: number,
-    minutes: number
+    minutes: number,
   ) => {
     const now = new Date();
     const scheduledTime = new Date();
@@ -216,7 +234,7 @@ export default function MedicineDetailsScreen() {
       scheduledTime.setDate(scheduledTime.getDate() + 1);
 
     const secondsUntil = Math.floor(
-      (scheduledTime.getTime() - now.getTime()) / 1000
+      (scheduledTime.getTime() - now.getTime()) / 1000,
     );
 
     await Notifications.scheduleNotificationAsync({
@@ -235,7 +253,7 @@ export default function MedicineDetailsScreen() {
       "Success",
       `Reminder set for ${hours % 12 || 12}:${minutes
         .toString()
-        .padStart(2, "0")} ${hours >= 12 ? "PM" : "AM"}.`
+        .padStart(2, "0")} ${hours >= 12 ? "PM" : "AM"}.`,
     );
   };
 
@@ -257,7 +275,7 @@ export default function MedicineDetailsScreen() {
     if (isNaN(inventory) || inventory < 0) {
       Alert.alert(
         "Invalid Input",
-        "Please enter a valid number for current pill count."
+        "Please enter a valid number for current pill count.",
       );
       return;
     }
@@ -269,9 +287,12 @@ export default function MedicineDetailsScreen() {
     try {
       await updateMedicationInventory(med.medicineName, inventory, dailyDose);
       // Update local state so the card shows immediately
-      setInventoryData(prev => ({
+      setInventoryData((prev) => ({
         ...prev,
-        [med.medicineName.toLowerCase()]: { count: inventory, daily: dailyDose },
+        [med.medicineName.toLowerCase()]: {
+          count: inventory,
+          daily: dailyDose,
+        },
       }));
       Alert.alert("Success", "Inventory tracked for " + med.medicineName);
       setShowInventorySheet(false);
@@ -304,7 +325,11 @@ export default function MedicineDetailsScreen() {
             <Text style={styles.langBtnText}>
               {selectedLang.label.split(" ")[0]}
             </Text>
-            <Ionicons name="chevron-down" size={14} color="#0369A1" />
+            <Ionicons
+              name="chevron-down"
+              size={14}
+              color={Colors.primaryDark}
+            />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -333,7 +358,7 @@ export default function MedicineDetailsScreen() {
         {/* Translation Status Indicator */}
         {isTranslating && (
           <View style={styles.translatingBar}>
-            <ActivityIndicator size="small" color="#0369A1" />
+            <ActivityIndicator size="small" color={Colors.primary} />
             <Text style={styles.translatingText}>
               Translating to {selectedLang.label.split(" ").slice(1).join(" ")}
               ...
@@ -355,7 +380,7 @@ export default function MedicineDetailsScreen() {
               {/* Medicine Name Card */}
               <View style={styles.titleCard}>
                 <View style={styles.iconContainer}>
-                  <Ionicons name="medkit" size={28} color="#0369A1" />
+                  <Ionicons name="medkit" size={28} color={Colors.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.medicineName}>{displayName}</Text>
@@ -368,15 +393,19 @@ export default function MedicineDetailsScreen() {
                     handleSpeak(
                       `${displayName}. ${displayPurpose}`,
                       `name-${index}`,
-                      index
+                      index,
                     )
                   }
                   style={styles.ttsMainBtn}
                 >
                   {speakingField === `name-${index}` ? (
-                    <ActivityIndicator size={20} color="#0369A1" />
+                    <ActivityIndicator size={20} color={Colors.primary} />
                   ) : (
-                    <Ionicons name="volume-medium" size={24} color="#0369A1" />
+                    <Ionicons
+                      name="volume-medium"
+                      size={24}
+                      color={Colors.primary}
+                    />
                   )}
                 </TouchableOpacity>
               </View>
@@ -412,16 +441,18 @@ export default function MedicineDetailsScreen() {
                 <View
                   style={[
                     styles.infoCard,
-                    { borderColor: "#10B981", borderWidth: 2 },
+                    { borderColor: Colors.primary, borderWidth: 2 },
                   ]}
                 >
                   <View style={styles.cardHeader}>
                     <Ionicons
                       name="information-circle"
                       size={24}
-                      color="#10B981"
+                      color={Colors.primary}
                     />
-                    <Text style={[styles.cardTitle, { color: "#047857" }]}>
+                    <Text
+                      style={[styles.cardTitle, { color: Colors.primaryDark }]}
+                    >
                       How to Take
                     </Text>
                     <TouchableOpacity
@@ -429,18 +460,18 @@ export default function MedicineDetailsScreen() {
                         handleSpeak(
                           displaySimpleInstructions,
                           `instructions-${index}`,
-                          index
+                          index,
                         )
                       }
                       style={styles.ttsBtn}
                     >
                       {speakingField === `instructions-${index}` ? (
-                        <ActivityIndicator size={18} color="#10B981" />
+                        <ActivityIndicator size={18} color={Colors.primary} />
                       ) : (
                         <Ionicons
                           name="volume-medium"
                           size={24}
-                          color="#10B981"
+                          color={Colors.primary}
                         />
                       )}
                     </TouchableOpacity>
@@ -450,7 +481,7 @@ export default function MedicineDetailsScreen() {
                       styles.usageText,
                       {
                         fontWeight: "700",
-                        color: "#064E3B",
+                        color: Colors.primaryDark,
                         fontSize: moderateScale(18),
                       },
                     ]}
@@ -462,7 +493,11 @@ export default function MedicineDetailsScreen() {
 
               <View style={styles.infoCard}>
                 <View style={styles.cardHeader}>
-                  <MaterialIcons name="description" size={24} color="#0369A1" />
+                  <MaterialIcons
+                    name="description"
+                    size={24}
+                    color={Colors.primary}
+                  />
                   <Text style={styles.cardTitle}>Purpose</Text>
                   <TouchableOpacity
                     onPress={() =>
@@ -471,12 +506,12 @@ export default function MedicineDetailsScreen() {
                     style={styles.ttsBtn}
                   >
                     {speakingField === `purpose-${index}` ? (
-                      <ActivityIndicator size={18} color="#0369A1" />
+                      <ActivityIndicator size={18} color={Colors.primary} />
                     ) : (
                       <Ionicons
                         name="volume-medium"
                         size={24}
-                        color="#0369A1"
+                        color={Colors.primary}
                       />
                     )}
                   </TouchableOpacity>
@@ -520,13 +555,17 @@ export default function MedicineDetailsScreen() {
               {/* Schedule Card & Reminder Action */}
               <View style={styles.infoCard}>
                 <View style={styles.cardHeader}>
-                  <MaterialIcons name="schedule" size={24} color="#0369A1" />
+                  <MaterialIcons
+                    name="schedule"
+                    size={24}
+                    color={Colors.primary}
+                  />
                   <Text style={styles.cardTitle}>Recommended Schedule</Text>
                   <TouchableOpacity
                     onPress={() => handleSetReminder(med)}
                     style={styles.reminderSmallBtn}
                   >
-                    <Ionicons name="alarm" size={22} color="#0EA5E9" />
+                    <Ionicons name="alarm" size={22} color={Colors.primary} />
                   </TouchableOpacity>
                 </View>
                 <Text style={styles.usageText}>
@@ -538,18 +577,24 @@ export default function MedicineDetailsScreen() {
               <View
                 style={[
                   styles.infoCard,
-                  { borderColor: "#C4B5FD", borderWidth: 1 },
+                  { borderColor: Colors.secondary, borderWidth: 1 },
                 ]}
               >
                 <View style={[styles.cardHeader, { marginBottom: 16 }]}>
-                  <MaterialIcons name="inventory" size={24} color="#8B5CF6" />
-                  <Text style={[styles.cardTitle, { color: "#6D28D9" }]}>
+                  <MaterialIcons
+                    name="inventory"
+                    size={24}
+                    color={Colors.primary}
+                  />
+                  <Text
+                    style={[styles.cardTitle, { color: Colors.primaryDark }]}
+                  >
                     Virtual Pillbox
                   </Text>
                   <TouchableOpacity
                     onPress={() => handleOpenInventory(index)}
                     style={{
-                      backgroundColor: "#EDE9FE",
+                      backgroundColor: Colors.primaryBg,
                       paddingHorizontal: 16,
                       paddingVertical: 8,
                       borderRadius: 20,
@@ -557,7 +602,7 @@ export default function MedicineDetailsScreen() {
                   >
                     <Text
                       style={{
-                        color: "#6D28D9",
+                        color: Colors.primaryDark,
                         fontWeight: "800",
                         fontSize: moderateScale(12),
                       }}
@@ -569,37 +614,126 @@ export default function MedicineDetailsScreen() {
                 {(() => {
                   const inv = inventoryData[med.medicineName.toLowerCase()];
                   if (inv) {
-                    const daysLeft = inv.daily > 0 ? Math.floor(inv.count / inv.daily) : inv.count;
+                    const daysLeft =
+                      inv.daily > 0
+                        ? Math.floor(inv.count / inv.daily)
+                        : inv.count;
                     const isLow = daysLeft <= 3;
                     return (
                       <View style={{ gap: 10 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <View style={{ alignItems: 'center', flex: 1 }}>
-                            <Text style={{ fontSize: moderateScale(28), fontWeight: '800', color: isLow ? '#DC2626' : '#6D28D9' }}>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                        >
+                          <View style={{ alignItems: "center", flex: 1 }}>
+                            <Text
+                              style={{
+                                fontSize: moderateScale(28),
+                                fontWeight: "800",
+                                color: isLow
+                                  ? Colors.error
+                                  : Colors.primaryDark,
+                              }}
+                            >
                               {inv.count}
                             </Text>
-                            <Text style={{ fontSize: moderateScale(11), fontWeight: '600', color: '#64748B' }}>Pills Left</Text>
+                            <Text
+                              style={{
+                                fontSize: moderateScale(11),
+                                fontWeight: "600",
+                                color: Colors.textSecondary,
+                              }}
+                            >
+                              Pills Left
+                            </Text>
                           </View>
-                          <View style={{ width: 1, height: 40, backgroundColor: '#E2E8F0' }} />
-                          <View style={{ alignItems: 'center', flex: 1 }}>
-                            <Text style={{ fontSize: moderateScale(28), fontWeight: '800', color: isLow ? '#DC2626' : '#6D28D9' }}>
+                          <View
+                            style={{
+                              width: 1,
+                              height: 40,
+                              backgroundColor: Colors.border,
+                            }}
+                          />
+                          <View style={{ alignItems: "center", flex: 1 }}>
+                            <Text
+                              style={{
+                                fontSize: moderateScale(28),
+                                fontWeight: "800",
+                                color: isLow
+                                  ? Colors.error
+                                  : Colors.primaryDark,
+                              }}
+                            >
                               {daysLeft}
                             </Text>
-                            <Text style={{ fontSize: moderateScale(11), fontWeight: '600', color: '#64748B' }}>Days Left</Text>
+                            <Text
+                              style={{
+                                fontSize: moderateScale(11),
+                                fontWeight: "600",
+                                color: Colors.textSecondary,
+                              }}
+                            >
+                              Days Left
+                            </Text>
                           </View>
-                          <View style={{ width: 1, height: 40, backgroundColor: '#E2E8F0' }} />
-                          <View style={{ alignItems: 'center', flex: 1 }}>
-                            <Text style={{ fontSize: moderateScale(28), fontWeight: '800', color: '#6D28D9' }}>
+                          <View
+                            style={{
+                              width: 1,
+                              height: 40,
+                              backgroundColor: Colors.border,
+                            }}
+                          />
+                          <View style={{ alignItems: "center", flex: 1 }}>
+                            <Text
+                              style={{
+                                fontSize: moderateScale(28),
+                                fontWeight: "800",
+                                color: Colors.primaryDark,
+                              }}
+                            >
                               {inv.daily}
                             </Text>
-                            <Text style={{ fontSize: moderateScale(11), fontWeight: '600', color: '#64748B' }}>Per Day</Text>
+                            <Text
+                              style={{
+                                fontSize: moderateScale(11),
+                                fontWeight: "600",
+                                color: Colors.textSecondary,
+                              }}
+                            >
+                              Per Day
+                            </Text>
                           </View>
                         </View>
                         {isLow && (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF2F2', padding: 10, borderRadius: 12, gap: 8 }}>
-                            <Ionicons name="warning" size={16} color="#DC2626" />
-                            <Text style={{ fontSize: moderateScale(12), fontWeight: '700', color: '#DC2626', flex: 1 }}>
-                              Low Stock! Only {daysLeft} day{daysLeft !== 1 ? 's' : ''} of supply remaining. Time to restock.
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              backgroundColor: Colors.errorBg,
+                              padding: 10,
+                              borderRadius: 12,
+                              gap: 8,
+                            }}
+                          >
+                            <Ionicons
+                              name="warning"
+                              size={16}
+                              color={Colors.error}
+                            />
+                            <Text
+                              style={{
+                                fontSize: moderateScale(12),
+                                fontWeight: "700",
+                                color: Colors.error,
+                                flex: 1,
+                              }}
+                            >
+                              Low Stock! Only {daysLeft} day
+                              {daysLeft !== 1 ? "s" : ""} of supply remaining.
+                              Time to restock.
                             </Text>
                           </View>
                         )}
@@ -610,11 +744,14 @@ export default function MedicineDetailsScreen() {
                     <Text
                       style={[
                         styles.usageText,
-                        { fontSize: moderateScale(14), color: "#4C1D95" },
+                        {
+                          fontSize: moderateScale(14),
+                          color: Colors.primaryDark,
+                        },
                       ]}
                     >
-                      Track your physical supply and get "Low Stock" alerts to
-                      restock in time.
+                      Track your physical supply and get &quot;Low Stock&quot;
+                      alerts to restock in time.
                     </Text>
                   );
                 })()}
@@ -712,7 +849,7 @@ export default function MedicineDetailsScreen() {
                       <Ionicons
                         name="checkmark-circle"
                         size={20}
-                        color="#0369A1"
+                        color={Colors.primary}
                       />
                     )}
                   </TouchableOpacity>
@@ -796,8 +933,8 @@ export default function MedicineDetailsScreen() {
                     styles.btnPrimary,
                     {
                       marginTop: 10,
-                      backgroundColor: "#8B5CF6",
-                      shadowColor: "#8B5CF6",
+                      backgroundColor: Colors.secondary,
+                      shadowColor: Colors.secondary,
                     },
                   ]}
                   onPress={handleSaveInventory}
