@@ -1,40 +1,46 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import NetInfo from "@react-native-community/netinfo";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Notifications from "expo-notifications";
 import * as Speech from "expo-speech";
 import React, { useEffect, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Image,
-    Modal,
-    Platform,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    Vibration,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+  Modal,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Vibration,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "../constants/Colors";
 import {
-    analyzeInteractions,
-    analyzeMedicineImage,
-    InteractionReport,
-    MedicineAnalysis,
-    translateBatch,
-    translateText,
+  analyzeInteractions,
+  analyzeMedicineImage,
+  InteractionReport,
+  MedicineAnalysis,
+  translateBatch,
+  translateText,
 } from "../services/gemini";
 import { Language, LANGUAGES } from "../services/languages";
 import { saveMedication } from "../services/medicationStorage";
+import { findOfflineMedicineByName } from "../services/offlineFallback";
 import {
-    getGeneratedOfflineMedicineCount,
-    getOfflineMedicineCount,
+  getGeneratedOfflineMedicineCount,
+  getOfflineMedicineCount,
+  OfflineMedicineRecord,
 } from "../services/offlineMedicineData";
+import {
+  extractOfflineOcrResult,
+  OfflinePrescriptionIdentity,
+} from "../services/offlineOcr";
 import { getRecentScans, SavedScan, saveScan } from "../services/storage";
 import { moderateScale, scale, verticalScale } from "../utils/responsive";
 // Configure notification handler
@@ -601,6 +607,8 @@ export default function Scanner() {
   const [showRecentModal, setShowRecentModal] = useState(false);
   const [expandedMedIndex, setExpandedMedIndex] = useState<number | null>(0); // Default expand first
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showOfflineSearchModal, setShowOfflineSearchModal] = useState(false);
+  const [offlineSearchInput, setOfflineSearchInput] = useState("");
   const [successMessage, setSuccessMessage] = useState({
     time: "",
     tone: "",
@@ -616,6 +624,64 @@ export default function Scanner() {
     Record<number, { name: string; purpose: string; warnings: string }>
   >({});
   const cameraRef = useRef<CameraView>(null);
+
+  const mapOfflineRecordToAnalysis = (
+    record: OfflineMedicineRecord,
+    identity?: OfflinePrescriptionIdentity,
+    fromOcrText?: string,
+  ): MedicineAnalysis => ({
+    medicineName: record.name,
+    activeIngredients: record.genericName,
+    commonUses: record.commonUses,
+    dosage: "Check label / prescription",
+    warnings: record.warnings,
+    sideEffects: record.sideEffects.join(", "),
+    foodWarnings: [],
+    simpleInstructions: fromOcrText
+      ? "Offline OCR + dataset match. Confirm exact dose on your label."
+      : "Offline result from local medicine dataset. Confirm exact dose on your label.",
+    patientName: identity?.patientName,
+    prescribedBy: identity?.prescribedBy,
+    hospital: identity?.hospital,
+    licenseNumber: identity?.licenseNumber,
+    affordability: {
+      genericAlternative: record.genericName,
+      estimatedSavings: record.estimatedPrice,
+      seniorDiscountEligible: true,
+      philHealthCoverage: record.philHealthCovered
+        ? "May be covered under selected PhilHealth packages"
+        : "No confirmed offline coverage data",
+      governmentPrograms: [
+        "PCSO Medical Assistance",
+        "Malasakit Center",
+        "DSWD AICS",
+      ],
+    },
+  });
+
+  const handleOfflineSearch = () => {
+    const query = offlineSearchInput.trim();
+    if (!query) {
+      Alert.alert("Enter Medicine Name", "Please type a medicine name first.");
+      return;
+    }
+
+    const match = findOfflineMedicineByName(query);
+    if (!match) {
+      Alert.alert(
+        "No Offline Match",
+        "No medicine matched that name in local dataset. Try brand or generic name.",
+      );
+      return;
+    }
+
+    const offlineResult = mapOfflineRecordToAnalysis(match);
+    setResults([offlineResult]);
+    void saveScan([offlineResult], photo || "offline-search");
+    void saveMedication(photo || "offline-search", offlineResult);
+    setInteractionReport(null);
+    setShowOfflineSearchModal(false);
+  };
   // TTS Handler — uses pre-translated text when available, otherwise translates on-the-fly
   const handleSpeak = async (text: string, cardIndex?: number) => {
     try {
@@ -824,15 +890,6 @@ export default function Scanner() {
   };
   const identifyMedicine = async () => {
     if (!photo) return;
-    // Offline Check
-    const netState = await NetInfo.fetch();
-    if (!netState.isConnected) {
-      Alert.alert(
-        "No Internet Connection",
-        "You need an internet connection to identify new medicines. Please check your settings.",
-      );
-      return;
-    }
     setIsAnalyzing(true);
     setError(null);
     setInteractionReport(null);
@@ -840,6 +897,28 @@ export default function Scanner() {
       // 1. Identification
       const analysis = await analyzeMedicineImage(photo, scanMode);
       setResults(analysis);
+
+      if (
+        analysis.length === 1 &&
+        analysis[0]?.medicineName === "Offline Scan Mode"
+      ) {
+        const ocrResult = await extractOfflineOcrResult(photo);
+        if (ocrResult?.record) {
+          const enriched = mapOfflineRecordToAnalysis(
+            ocrResult.record,
+            ocrResult.identity,
+            ocrResult.recognizedText,
+          );
+          setResults([enriched]);
+          await saveScan([enriched], photo);
+          await saveMedication(photo, enriched);
+          setShowOfflineSearchModal(false);
+          setInteractionReport(null);
+        } else {
+          setShowOfflineSearchModal(true);
+        }
+      }
+
       await saveScan(analysis, photo);
       // 1.5. Save to Medication Storage (for My Medications screen)
       for (const medicine of analysis) {
@@ -1659,6 +1738,54 @@ export default function Scanner() {
         onSelect={setSelectedLang}
         onClose={() => setShowLangPicker(false)}
       />
+      {/* Offline Name Search Modal */}
+      <Modal
+        transparent
+        visible={showOfflineSearchModal}
+        animationType="slide"
+        onRequestClose={() => setShowOfflineSearchModal(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={styles.pickerOverlay}
+          onPress={() => setShowOfflineSearchModal(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={styles.offlineSearchCard}
+            onPress={() => {}}
+          >
+            <Text style={styles.offlineSearchTitle}>
+              Offline Medicine Search
+            </Text>
+            <Text style={styles.offlineSearchSub}>
+              Camera AI needs internet. Search by brand or generic name from
+              local Kaggle dataset.
+            </Text>
+            <TextInput
+              style={styles.offlineInput}
+              placeholder="Example: Biogesic, Paracetamol, Losartan"
+              placeholderTextColor="#94A3B8"
+              value={offlineSearchInput}
+              onChangeText={setOfflineSearchInput}
+            />
+            <View style={styles.offlineSearchActions}>
+              <TouchableOpacity
+                style={styles.offlineCancelBtn}
+                onPress={() => setShowOfflineSearchModal(false)}
+              >
+                <Text style={styles.offlineCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.offlinePrimaryBtn}
+                onPress={handleOfflineSearch}
+              >
+                <Text style={styles.offlinePrimaryText}>Search Offline</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
       {/* Success Confirmation Modal */}
       <Modal transparent visible={showSuccessModal} animationType="fade">
         <TouchableOpacity
@@ -1854,6 +1981,69 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 10,
+  },
+  offlineSearchCard: {
+    backgroundColor: "#FFF",
+    width: "100%",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: scale(20),
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  offlineSearchTitle: {
+    fontSize: moderateScale(18),
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  offlineSearchSub: {
+    marginTop: 6,
+    fontSize: moderateScale(13),
+    color: "#64748B",
+    lineHeight: 20,
+    fontWeight: "500",
+  },
+  offlineInput: {
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: moderateScale(14),
+    color: "#0F172A",
+    backgroundColor: "#F8FAFC",
+  },
+  offlineSearchActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+    marginTop: 14,
+  },
+  offlineCancelBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
+  },
+  offlineCancelText: {
+    fontSize: moderateScale(13),
+    color: "#64748B",
+    fontWeight: "700",
+  },
+  offlinePrimaryBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+  },
+  offlinePrimaryText: {
+    fontSize: moderateScale(13),
+    color: "#FFF",
+    fontWeight: "700",
   },
   pickerHeaderContainer: {
     flexDirection: "row",
