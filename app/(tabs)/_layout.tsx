@@ -110,7 +110,9 @@ export default function TabLayout() {
                 color={focused ? "#EF4444" : color}
               />
               {focused && (
-                <View style={[styles.activeDot, { backgroundColor: "#EF4444" }]} />
+                <View
+                  style={[styles.activeDot, { backgroundColor: "#EF4444" }]}
+                />
               )}
             </View>
           ),
@@ -137,8 +139,8 @@ export default function TabLayout() {
   );
 }
 
-const TAB_HEIGHT = Platform.OS === "ios" ? 82 : 72;
-const BOTTOM_PADDING = Platform.OS === "ios" ? 24 : 10;
+const TAB_HEIGHT = Platform.OS === "ios" ? 74 : 64;
+const BOTTOM_PADDING = Platform.OS === "ios" ? 16 : 8;
 
 const styles = StyleSheet.create({
   tabBar: {
@@ -152,7 +154,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#E2E8F0",
     paddingBottom: BOTTOM_PADDING,
-    paddingTop: 10,
+    paddingTop: 8,
     shadowColor: "#64748B",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.08,
@@ -175,18 +177,18 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   tabLabel: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "700",
-    letterSpacing: 0.4,
-    marginTop: 2,
+    letterSpacing: 0.3,
+    marginTop: 1,
   },
   tabItem: {
-    paddingTop: 4,
+    paddingTop: 2,
   },
   iconWrap: {
     alignItems: "center",
     justifyContent: "center",
-    height: 30,
+    height: 28,
   },
   activeDot: {
     width: 4,
@@ -197,24 +199,24 @@ const styles = StyleSheet.create({
   },
   centerBtnOuter: {
     position: "absolute",
-    top: -28,
+    top: -22,
     alignItems: "center",
     justifyContent: "center",
   },
   centerBtnGradient: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 4,
+    borderWidth: 3,
     borderColor: BAR_BG,
   },
   centerGlowRing: {
     position: "absolute",
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     borderWidth: 2,
     borderColor: `${Colors.primary}33`,
   },

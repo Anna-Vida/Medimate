@@ -4,20 +4,21 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-  Alert,
-  KeyboardAvoidingView,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    KeyboardAvoidingView,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { Colors } from "../../constants/Colors";
-import { signInFlow } from "../../services/authFacade";
+import { getCurrentUser, signInFlow } from "../../services/authFacade";
+import { syncIdentityToProfile } from "../../services/userProfile";
 import { moderateScale, scale, verticalScale } from "../../utils/responsive";
 
 export default function LoginScreen() {
@@ -37,18 +38,11 @@ export default function LoginScreen() {
       setLoading(true);
       await signInFlow(email.trim(), pin.trim());
       await AsyncStorage.setItem("onboarding_done", "1");
-      await AsyncStorage.setItem("user_email", email.trim());
-
-      // Ensure user_profile has the email
-      const existingRaw = await AsyncStorage.getItem("user_profile");
-      const existingProfile = existingRaw ? JSON.parse(existingRaw) : {};
-      await AsyncStorage.setItem(
-        "user_profile",
-        JSON.stringify({
-          ...existingProfile,
-          email: email.trim(),
-        }),
-      );
+      const authUser = getCurrentUser();
+      await syncIdentityToProfile({
+        email: authUser?.email || email.trim(),
+        fullName: authUser?.displayName,
+      });
 
       router.replace("/(tabs)");
     } catch (e: any) {

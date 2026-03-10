@@ -2,43 +2,25 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  Alert,
-  RefreshControl,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    RefreshControl,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
+import AppHeader from "../components/app-header";
 import { Colors } from "../constants/Colors";
 import {
-  deleteReminder,
-  getAllReminders,
-  ReminderSchedule,
+    getAllReminders,
+    ReminderSchedule,
 } from "../services/medicationStorage";
 import { moderateScale, scale, verticalScale } from "../utils/responsive";
 
 type FilterType = "week" | "month" | "year";
-
-const PILL_ICONS: Record<string, string> = {
-  cap: "💊",
-  tab: "💊",
-  capsule: "💊",
-  vitamin: "🧬",
-  syrup: "🧪",
-  default: "💊",
-};
-
-function getMedicineEmoji(name: string): string {
-  const lower = name.toLowerCase();
-  for (const [key, emoji] of Object.entries(PILL_ICONS)) {
-    if (lower.includes(key)) return emoji;
-  }
-  return PILL_ICONS.default;
-}
 
 function getFrequencyLabel(freq: string): string {
   switch (freq) {
@@ -60,16 +42,13 @@ function getFrequencyLabel(freq: string): string {
 export default function MedicationsScreen() {
   const router = useRouter();
   const [reminders, setReminders] = useState<ReminderSchedule[]>([]);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterType>("week");
   const [takenMeds, setTakenMeds] = useState<Set<string>>(new Set());
 
   const loadData = useCallback(async () => {
-    setLoading(true);
     const data = await getAllReminders();
     setReminders(data);
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -85,7 +64,7 @@ export default function MedicationsScreen() {
 
   // Toggle medication as taken
   const toggleMedicationTaken = (id: string) => {
-    setTakenMeds(prev => {
+    setTakenMeds((prev) => {
       const updated = new Set(prev);
       if (updated.has(id)) {
         updated.delete(id);
@@ -99,7 +78,6 @@ export default function MedicationsScreen() {
   // Filter reminders based on selected time range
   const filteredReminders = reminders.filter((r) => {
     const now = new Date();
-    const start = new Date(r.startDate);
     const end = new Date(r.endDate);
     if (filter === "week") {
       const weekAgo = new Date(now);
@@ -114,49 +92,28 @@ export default function MedicationsScreen() {
     return true;
   });
 
-  const handleDelete = (id: string, name: string) => {
-    Alert.alert("Remove Reminder", `Delete reminder for ${name}?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          await deleteReminder(id);
-          setReminders((prev) => prev.filter((r) => r.id !== id));
-        },
-      },
-    ]);
-  };
+  const completedCount = filteredReminders.filter((r) =>
+    takenMeds.has(r.id),
+  ).length;
+  const pendingCount = Math.max(filteredReminders.length - completedCount, 0);
+  const filterTitle =
+    filter === "week"
+      ? "This Week"
+      : filter === "month"
+        ? "This Month"
+        : "This Year";
 
   return (
     <SafeAreaView style={styles.root}>
       <StatusBar barStyle="dark-content" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7}>
-            <View style={styles.headerBtn}>
-              <Ionicons name="arrow-back" size={24} color="#334155" />
-            </View>
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.headerTitle}>Medicine Reminder</Text>
-            <Text style={styles.headerSub}>
-              {reminders.length} schedule{reminders.length !== 1 ? "s" : ""}{" "}
-              active
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => router.push("/inventory")}
-            activeOpacity={0.7}
-          >
-            <View style={styles.headerBtn}>
-              <Ionicons name="cube-outline" size={22} color="#334155" />
-            </View>
-          </TouchableOpacity>
-        </View>
-      </View>
+      <AppHeader
+        title="Medicine Reminder"
+        subtitle={`${reminders.length} schedule${reminders.length !== 1 ? "s" : ""} active`}
+        onBack={() => router.back()}
+        rightIcon="cube-outline"
+        onRightPress={() => router.push("/inventory")}
+      />
 
       {/* Filter Tabs */}
       <View style={styles.filterRow}>
@@ -201,10 +158,31 @@ export default function MedicationsScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.summaryRow}>
+          <View
+            style={[styles.summaryCard, { backgroundColor: Colors.primaryBg }]}
+          >
+            <Text style={styles.summaryValue}>{filteredReminders.length}</Text>
+            <Text style={styles.summaryLabel}>Schedules</Text>
+          </View>
+          <View
+            style={[styles.summaryCard, { backgroundColor: Colors.successBg }]}
+          >
+            <Text style={styles.summaryValue}>{completedCount}</Text>
+            <Text style={styles.summaryLabel}>Completed</Text>
+          </View>
+          <View
+            style={[styles.summaryCard, { backgroundColor: Colors.warningBg }]}
+          >
+            <Text style={styles.summaryValue}>{pendingCount}</Text>
+            <Text style={styles.summaryLabel}>Pending</Text>
+          </View>
+        </View>
+
         {/* Today Label */}
         {filteredReminders.length > 0 && (
           <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>This Week</Text>
+            <Text style={styles.sectionTitle}>{filterTitle}</Text>
             <Text style={styles.reminderCount}>{filteredReminders.length}</Text>
           </View>
         )}
@@ -220,21 +198,33 @@ export default function MedicationsScreen() {
                   entering={FadeInUp.duration(400).delay(index * 80)}
                 >
                   <TouchableOpacity
-                    style={[styles.medicineListItem, isTaken && styles.medicineListItemTaken]}
+                    style={[
+                      styles.medicineListItem,
+                      isTaken && styles.medicineListItemTaken,
+                    ]}
                     activeOpacity={0.7}
-                    onPress={() => router.push({
-                      pathname: "/add-schedule",
-                      params: { editId: reminder.id },
-                    })}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/add-schedule",
+                        params: { editId: reminder.id },
+                      })
+                    }
                   >
                     {/* Checkbox */}
                     <TouchableOpacity
-                      style={[styles.checkbox, isTaken && styles.checkboxChecked]}
+                      style={[
+                        styles.checkbox,
+                        isTaken && styles.checkboxChecked,
+                      ]}
                       onPress={() => toggleMedicationTaken(reminder.id)}
                       activeOpacity={0.7}
                     >
                       {isTaken && (
-                        <Ionicons name="checkmark-sharp" size={16} color="#FFF" />
+                        <Ionicons
+                          name="checkmark-sharp"
+                          size={16}
+                          color="#FFF"
+                        />
                       )}
                     </TouchableOpacity>
 
@@ -250,14 +240,27 @@ export default function MedicationsScreen() {
                           {reminder.medicineName}
                         </Text>
                         {/* Status Badge */}
-                        <View style={[styles.statusBadge, isTaken && styles.statusBadgeTaken]}>
-                          <Text style={[styles.statusLabel, isTaken && styles.statusLabelTaken]}>
-                            {reminder.dose ? 'Caution' : 'Info'}
+                        <View
+                          style={[
+                            styles.statusBadge,
+                            isTaken && styles.statusBadgeTaken,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.statusLabel,
+                              isTaken && styles.statusLabelTaken,
+                            ]}
+                          >
+                            {isTaken ? "Taken" : "Pending"}
                           </Text>
                         </View>
                       </View>
                       <Text style={styles.medicineDetails} numberOfLines={2}>
-                        {reminder.dose ? `${reminder.dose} ${reminder.measurement}` : 'No dosage'} • {getFrequencyLabel(reminder.frequency)}
+                        {reminder.dose
+                          ? `${reminder.dose} ${reminder.measurement}`
+                          : "No dosage"}{" "}
+                        • {getFrequencyLabel(reminder.frequency)}
                       </Text>
                       <View style={styles.medicineFooter}>
                         {reminder.reminderTime && (
@@ -265,7 +268,9 @@ export default function MedicationsScreen() {
                             {reminder.reminderTime}
                           </Text>
                         )}
-                        <Text style={styles.dayLabel}>Thu</Text>
+                        <Text style={styles.dayLabel}>
+                          {reminder.startDate} to {reminder.endDate}
+                        </Text>
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -337,6 +342,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: scale(8),
     paddingHorizontal: scale(20),
+    marginTop: verticalScale(10),
     marginBottom: verticalScale(8),
   },
   filterTab: {
@@ -360,6 +366,31 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   bodyContent: { paddingHorizontal: scale(20), paddingTop: verticalScale(12) },
 
+  summaryRow: {
+    flexDirection: "row",
+    gap: scale(10),
+    marginBottom: verticalScale(14),
+  },
+  summaryCard: {
+    flex: 1,
+    borderRadius: 14,
+    paddingVertical: verticalScale(10),
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  summaryValue: {
+    fontSize: moderateScale(16),
+    fontWeight: "800",
+    color: Colors.textPrimary,
+  },
+  summaryLabel: {
+    marginTop: 2,
+    fontSize: moderateScale(11),
+    color: Colors.textSecondary,
+    fontWeight: "700",
+  },
+
   // Section Header
   sectionRow: {
     flexDirection: "row",
@@ -381,7 +412,11 @@ const styles = StyleSheet.create({
     paddingVertical: verticalScale(4),
     borderRadius: 20,
   },
-  viewAll: { fontSize: moderateScale(14), fontWeight: "600", color: Colors.primary },
+  viewAll: {
+    fontSize: moderateScale(14),
+    fontWeight: "600",
+    color: Colors.primary,
+  },
 
   // List View
   listContainer: {
@@ -418,7 +453,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: '#FFF',
+    backgroundColor: "#FFF",
     flexShrink: 0,
   },
   checkboxChecked: {
@@ -474,9 +509,11 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
   dayLabel: {
-    fontSize: moderateScale(11),
+    fontSize: moderateScale(10),
     fontWeight: "600",
     color: Colors.textTertiary,
+    maxWidth: "70%",
+    textAlign: "right",
   },
   statusBadge: {
     paddingHorizontal: scale(8),

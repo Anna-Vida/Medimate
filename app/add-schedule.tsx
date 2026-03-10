@@ -2,26 +2,26 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
+import AppHeader from "../components/app-header";
+import { Colors } from "../constants/Colors";
 import {
-  getAllReminders,
-  saveReminder,
-  updateReminder,
+    getAllReminders,
+    saveReminder,
+    updateReminder,
 } from "../services/medicationStorage";
 import { moderateScale, scale, verticalScale } from "../utils/responsive";
-import { Colors } from "../constants/Colors";
 
 const FREQUENCIES = [
   "Everyday",
@@ -117,11 +117,16 @@ export default function AddScheduleScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.root}>
-      <StatusBar barStyle="dark-content" />
-
-
-
+    <SafeAreaView style={styles.root} edges={["left", "right", "bottom"]}>
+      <AppHeader
+        title={isEdit ? "Edit Schedule" : "Add Schedule"}
+        subtitle={
+          isEdit
+            ? "Update your medicine reminder"
+            : "Create a new medicine reminder"
+        }
+        onBack={() => router.back()}
+      />
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -315,7 +320,7 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   bodyContent: {
     padding: scale(20),
-    paddingTop: verticalScale(8),
+    paddingTop: verticalScale(2),
   },
 
   fieldLabel: {

@@ -1,9 +1,15 @@
-import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Location from 'expo-location';
-import { useRouter } from 'expo-router';
-import * as Speech from 'expo-speech';
-import React, { useEffect, useRef, useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Location from "expo-location";
+import { useFocusEffect, useRouter } from "expo-router";
+import * as SMS from "expo-sms";
+import React, {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 import {
     Alert,
     Linking,
@@ -14,621 +20,1227 @@ import {
     TextInput,
     TouchableOpacity,
     View,
-} from 'react-native';
+} from "react-native";
 import Animated, {
     FadeIn,
     FadeInDown,
     FadeInUp,
-    useAnimatedStyle,
-    useSharedValue,
-    withRepeat,
-    withSequence,
-    withTiming,
-} from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import * as AppTheme from '../constants/Colors';
-import {
-    requestSpeechPermission,
-    speakText,
-    startListening,
-    stopListening,
-    useSpeechRecognitionEvent,
-} from '../services/speechService';
+} from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
+import AppHeader from "../components/app-header";
+import * as AppTheme from "../constants/Colors";
+import { getProfileStorageKey } from "../services/userProfile";
+import { getUserScopedKey } from "../services/userScopedStorage";
 
 const Colors: any = (AppTheme as any).Colors ?? (AppTheme as any);
-const Shadows: any = (AppTheme as any).Shadows ?? {};
 
-const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
-const CONTACTS_KEY = 'emergency_contacts';
-const MEDICAL_ID_KEY = 'medical_id';
-const DISTRESS_KEYWORDS = ['help', 'emergency', 'call 911', 'accident', 'hurt', 'pain', 'ambulance'];
+const CONTACTS_KEY = "emergency_contacts";
+const MEDICAL_ID_KEY = "medical_id";
 
-interface EmergencyContact { id: string; name: string; phone: string; }
-interface MedicalInfo { name: string; bloodType: string; allergies: string; conditions: string; medications: string; }
+type TriageLevel = "red" | "orange" | "yellow" | "green";
 
-const DISASTER_TYPES = [
-    { icon: 'thunderstorm-outline', label: 'Typhoon', color: '#3B82F6', bg: '#EFF6FF' },
-    { icon: 'water-outline', label: 'Flood', color: '#0EA5E9', bg: '#F0F9FF' },
-    { icon: 'earth-outline', label: 'Earthquake', color: '#92400E', bg: '#FFFBEB' },
-    { icon: 'flame-outline', label: 'Fire', color: Colors.error, bg: Colors.errorBg },
+interface EmergencyContact {
+  id: string;
+  name: string;
+  phone: string;
+}
+
+interface MedicalInfo {
+  name: string;
+  bloodType: string;
+  allergies: string;
+  conditions: string;
+  medications: string;
+}
+
+interface HospitalUnit {
+  name: string;
+  phone: string;
+  mapQuery: string;
+  service: string;
+}
+
+interface Coordinates {
+  lat: number;
+  lng: number;
+}
+
+const toRad = (deg: number) => (deg * Math.PI) / 180;
+const calcDistanceKm = (a: Coordinates, b: Coordinates) => {
+  const earthKm = 6371;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const p1 = toRad(a.lat);
+  const p2 = toRad(b.lat);
+  const hav =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.sin(dLng / 2) * Math.sin(dLng / 2) * Math.cos(p1) * Math.cos(p2);
+  const c = 2 * Math.atan2(Math.sqrt(hav), Math.sqrt(1 - hav));
+  return earthKm * c;
+};
+
+const HOSPITAL_UNITS: HospitalUnit[] = [
+  {
+    name: "Philippine General Hospital ER",
+    phone: "8554-8400",
+    mapQuery: "Philippine General Hospital Emergency Room Manila",
+    service: "Adult trauma and emergency medicine",
+  },
+  {
+    name: "East Avenue Medical Center ER",
+    phone: "8928-0611",
+    mapQuery: "East Avenue Medical Center Emergency Room Quezon City",
+    service: "Critical care and public emergency unit",
+  },
+  {
+    name: "St. Lukes BGC Emergency",
+    phone: "8789-7700",
+    mapQuery: "St Lukes Medical Center BGC Emergency Room",
+    service: "24/7 emergency and acute response",
+  },
+];
+
+const TRIAGE_OPTIONS: {
+  level: TriageLevel;
+  label: string;
+  detail: string;
+  color: string;
+  bg: string;
+}[] = [
+  {
+    level: "red",
+    label: "Red",
+    detail: "Immediate intervention",
+    color: "#B91C1C",
+    bg: "#FEE2E2",
+  },
+  {
+    level: "orange",
+    label: "Orange",
+    detail: "Very urgent",
+    color: "#C2410C",
+    bg: "#FFEDD5",
+  },
+  {
+    level: "yellow",
+    label: "Yellow",
+    detail: "Urgent but stable",
+    color: "#A16207",
+    bg: "#FEF9C3",
+  },
+  {
+    level: "green",
+    label: "Green",
+    detail: "Minor injuries",
+    color: "#166534",
+    bg: "#DCFCE7",
+  },
 ];
 
 export default function Emergency() {
-    const router = useRouter();
-    const [contacts, setContacts] = useState<EmergencyContact[]>([]);
-    const [medicalInfo, setMedicalInfo] = useState<MedicalInfo>({ name: '', bloodType: '', allergies: '', conditions: '', medications: '' });
-    const [isEditingMedical, setIsEditingMedical] = useState(false);
-    const [isAddingContact, setIsAddingContact] = useState(false);
-    const [newName, setNewName] = useState('');
-    const [newPhone, setNewPhone] = useState('');
-    const [isListening, setIsListening] = useState(false);
-    const [sosCountdown, setSosCountdown] = useState<number | null>(null);
-    const [isSmsAvailable, setIsSmsAvailable] = useState(false);
-    const [isSirenActive, setIsSirenActive] = useState(false);
-    const [activeDisaster, setActiveDisaster] = useState<string | null>(null);
+  const router = useRouter();
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const locationRefreshRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
 
-    const RNAnimated = require('react-native').Animated;
-    const pulseAnim = useRef(new RNAnimated.Value(1)).current;
-    const sirenAnim = useRef(new RNAnimated.Value(1)).current;
-    const countdownTimerRef = useRef<any>(null);
+  const [contacts, setContacts] = useState<EmergencyContact[]>([]);
+  const [medicalInfo, setMedicalInfo] = useState<MedicalInfo>({
+    name: "",
+    bloodType: "",
+    allergies: "",
+    conditions: "",
+    medications: "",
+  });
+  const [isEditingMedical, setIsEditingMedical] = useState(false);
+  const [isAddingContact, setIsAddingContact] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [sosCountdown, setSosCountdown] = useState<number | null>(null);
+  const [isSmsAvailable, setIsSmsAvailable] = useState(false);
+  const [triageLevel, setTriageLevel] = useState<TriageLevel>("yellow");
+  const [currentLocation, setCurrentLocation] = useState<Coordinates | null>(
+    null,
+  );
+  const [hospitalCoords, setHospitalCoords] = useState<
+    Record<string, Coordinates>
+  >({});
+  const [lastHospitalUpdate, setLastHospitalUpdate] = useState<string>("--");
 
-    const sosPulse = useSharedValue(1);
-    useEffect(() => {
-        sosPulse.value = withRepeat(
-            withSequence(withTiming(1.06, { duration: 800 }), withTiming(1, { duration: 800 })),
-            -1, true
-        );
-    }, []);
-    const sosPulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: sosPulse.value }] }));
+  useEffect(() => {
+    void loadData();
+    void checkSmsAvailability();
+    void Location.requestForegroundPermissionsAsync();
 
-    const glowOpacity = useSharedValue(0.2);
-    useEffect(() => {
-        glowOpacity.value = withRepeat(
-            withSequence(withTiming(0.5, { duration: 1100 }), withTiming(0.2, { duration: 1100 })),
-            -1, true
-        );
-    }, []);
-    const glowStyle = useAnimatedStyle(() => ({ opacity: glowOpacity.value }));
-
-    useEffect(() => {
-        loadData(); checkSmsAvailability(); checkPermissions();
-        return () => { stopAutoDetection(); stopSiren(); if (countdownTimerRef.current) clearTimeout(countdownTimerRef.current); };
-    }, []);
-
-    const checkPermissions = async () => { await Location.requestForegroundPermissionsAsync(); await requestSpeechPermission(); };
-
-    useEffect(() => {
-        if (isListening) {
-            RNAnimated.loop(RNAnimated.sequence([
-                RNAnimated.timing(pulseAnim, { toValue: 1.25, duration: 750, useNativeDriver: true }),
-                RNAnimated.timing(pulseAnim, { toValue: 1, duration: 750, useNativeDriver: true }),
-            ])).start();
-        } else { pulseAnim.setValue(1); }
-    }, [isListening]);
-
-    useEffect(() => {
-        if (isSirenActive) {
-            RNAnimated.loop(RNAnimated.sequence([
-                RNAnimated.timing(sirenAnim, { toValue: 1.1, duration: 300, useNativeDriver: true }),
-                RNAnimated.timing(sirenAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-            ])).start();
-            playSirenLoop();
-        } else { sirenAnim.setValue(1); Speech.stop(); }
-    }, [isSirenActive]);
-
-    const playSirenLoop = () => {
-        if (!isSirenActive) return;
-        Speech.speak('EMERGENCY! HELP NEEDED!', { rate: 1.1, pitch: 1.1, volume: 1.0, onDone: () => { if (isSirenActive) playSirenLoop(); } });
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      if (locationRefreshRef.current) {
+        clearInterval(locationRefreshRef.current);
+      }
     };
-    const stopSiren = () => { setIsSirenActive(false); Speech.stop(); };
-    const checkSmsAvailability = async () => { try { const SMS = require('expo-sms'); setIsSmsAvailable(await SMS.isAvailableAsync()); } catch { setIsSmsAvailable(false); } };
+  }, []);
 
-    const loadData = async () => {
-        try {
-            const c = await AsyncStorage.getItem(CONTACTS_KEY); if (c) setContacts(JSON.parse(c));
-            const m = await AsyncStorage.getItem(MEDICAL_ID_KEY); if (m) setMedicalInfo(JSON.parse(m));
-        } catch (e) { console.error(e); }
-    };
-    const saveContacts = async (list: EmergencyContact[]) => { await AsyncStorage.setItem(CONTACTS_KEY, JSON.stringify(list)); setContacts(list); };
-    const saveMedicalInfo = async () => {
-        try { await AsyncStorage.setItem(MEDICAL_ID_KEY, JSON.stringify(medicalInfo)); setIsEditingMedical(false); Alert.alert('Saved', 'Medical ID updated.'); }
-        catch { Alert.alert('Error', 'Could not save Medical ID.'); }
+  // Keep handoff synced with latest profile edits whenever user opens this page.
+  useFocusEffect(
+    useCallback(() => {
+      void loadData();
+    }, []),
+  );
+
+  useEffect(() => {
+    const loadRealtimeHospitalData = async () => {
+      await refreshCurrentLocation();
+      await resolveHospitalCoordinates();
     };
 
-    useSpeechRecognitionEvent('start', () => setIsListening(true));
-    useSpeechRecognitionEvent('end', () => setIsListening(false));
-    useSpeechRecognitionEvent('result', (event) => {
-        if (sosCountdown !== null) return;
-        const t = event.results[0]?.transcript.toLowerCase() || '';
-        if (DISTRESS_KEYWORDS.find(k => t.includes(k))) startSOSCountdown();
+    void loadRealtimeHospitalData();
+    locationRefreshRef.current = setInterval(() => {
+      void refreshCurrentLocation();
+    }, 15000);
+
+    return () => {
+      if (locationRefreshRef.current) {
+        clearInterval(locationRefreshRef.current);
+      }
+    };
+  }, []);
+
+  const triageState = useMemo(
+    () => TRIAGE_OPTIONS.find((item) => item.level === triageLevel),
+    [triageLevel],
+  );
+
+  const formatDistanceKm = (value: number | null) => {
+    if (value === null) {
+      return "Distance unavailable";
+    }
+    if (value < 1) {
+      return `${Math.round(value * 1000)} m away`;
+    }
+    return `${value.toFixed(1)} km away`;
+  };
+
+  const realtimeUnits = useMemo(() => {
+    const enriched = HOSPITAL_UNITS.map((unit) => {
+      const unitCoord = hospitalCoords[unit.name];
+      const distanceKm =
+        currentLocation && unitCoord
+          ? calcDistanceKm(currentLocation, unitCoord)
+          : null;
+
+      return {
+        ...unit,
+        distanceKm,
+      };
     });
-    useSpeechRecognitionEvent('error', (event) => {
-        setIsListening(false);
-        if (event.error === 'not-allowed') Alert.alert('Permission Denied', 'Microphone access needed.');
-        else if (event.error !== 'no-speech') Alert.alert('Speech Error', `${event.error}: ${event.message || ''}`);
+
+    return enriched.sort((a, b) => {
+      const aDist = a.distanceKm ?? Number.MAX_SAFE_INTEGER;
+      const bDist = b.distanceKm ?? Number.MAX_SAFE_INTEGER;
+      return aDist - bDist;
     });
+  }, [currentLocation, hospitalCoords]);
 
-    const toggleAutoDetection = async () => { if (isListening) await stopAutoDetection(); else await startAutoDetection(); };
-    const startAutoDetection = async () => { try { await startListening(); speakText('Emergency listening active.'); } catch { setIsListening(false); Alert.alert('Error', 'Could not start.'); } };
-    const stopAutoDetection = async () => { try { await stopListening(); } catch { } setIsListening(false); };
+  const loadData = async () => {
+    try {
+      const storedContacts = await AsyncStorage.getItem(
+        getUserScopedKey(CONTACTS_KEY),
+      );
+      if (storedContacts) {
+        setContacts(JSON.parse(storedContacts));
+      }
 
-    const startSOSCountdown = () => {
-        if (sosCountdown !== null) return;
-        stopAutoDetection(); setSosCountdown(10); speakText('Emergency detected. Calling 911 in 10 seconds.');
-        let t = 10;
-        countdownTimerRef.current = setInterval(() => {
-            t -= 1; setSosCountdown(t);
-            if (t <= 0) { clearInterval(countdownTimerRef.current); setSosCountdown(null); executeSOS(); }
-        }, 1000);
-    };
-    const cancelSOS = () => { if (countdownTimerRef.current) clearInterval(countdownTimerRef.current); setSosCountdown(null); speakText('Cancelled.'); };
+      const storedMedical = await AsyncStorage.getItem(
+        getUserScopedKey(MEDICAL_ID_KEY),
+      );
+      const storedProfile = await AsyncStorage.getItem(getProfileStorageKey());
 
-    const executeSOS = async () => {
-        let locationLink = '';
-        try {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status === 'granted') { const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }); locationLink = ` https://maps.google.com/?q=${loc.coords.latitude},${loc.coords.longitude}`; }
-        } catch { }
-        if (contacts.length > 0 && isSmsAvailable) {
-            try { const SMS = require('expo-sms'); SMS.sendSMSAsync(contacts.map(c => c.phone), `🆘 EMERGENCY: I need help! Automated alert from MediMate.${locationLink}`).catch(console.error); } catch { }
+      const medicalBase: MedicalInfo = storedMedical
+        ? JSON.parse(storedMedical)
+        : {
+            name: "",
+            bloodType: "",
+            allergies: "",
+            conditions: "",
+            medications: "",
+          };
+
+      if (!storedProfile) {
+        setMedicalInfo(medicalBase);
+        return;
+      }
+
+      const profile = JSON.parse(storedProfile) as Record<string, string>;
+      const profileName =
+        `${profile.firstName || ""} ${profile.lastName || ""}`.trim();
+
+      setMedicalInfo({
+        ...medicalBase,
+        // Profile fields should be the source of truth for shared identity/medical basics.
+        name: profileName || medicalBase.name,
+        bloodType: profile.bloodType || medicalBase.bloodType,
+        allergies: profile.allergies || medicalBase.allergies,
+        conditions: profile.conditions || medicalBase.conditions,
+      });
+    } catch (error) {
+      console.error("Failed to load emergency data", error);
+    }
+  };
+
+  const refreshCurrentLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") return;
+
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      setCurrentLocation({
+        lat: loc.coords.latitude,
+        lng: loc.coords.longitude,
+      });
+
+      setLastHospitalUpdate(
+        new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      );
+    } catch {
+      // Keep existing data if a location update fails.
+    }
+  };
+
+  const resolveHospitalCoordinates = async () => {
+    try {
+      const pairs = await Promise.all(
+        HOSPITAL_UNITS.map(async (unit) => {
+          const res = await Location.geocodeAsync(unit.mapQuery);
+          const first = res[0];
+          if (!first) return null;
+          return {
+            name: unit.name,
+            coord: { lat: first.latitude, lng: first.longitude },
+          };
+        }),
+      );
+
+      const mapped: Record<string, Coordinates> = {};
+      pairs.forEach((item) => {
+        if (item) {
+          mapped[item.name] = item.coord;
         }
-        setTimeout(() => Linking.openURL('tel:911'), 500);
-    };
+      });
 
-    const addContact = () => {
-        if (!newName.trim() || !newPhone.trim()) { Alert.alert('Missing Info', 'Please enter both name and phone number.'); return; }
-        saveContacts([...contacts, { id: Date.now().toString(), name: newName.trim(), phone: newPhone.trim() }]);
-        setNewName(''); setNewPhone(''); setIsAddingContact(false);
-    };
-    const deleteContact = (id: string) => {
-        Alert.alert('Remove Contact?', 'Are you sure?', [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Remove', style: 'destructive', onPress: () => saveContacts(contacts.filter(c => c.id !== id)) },
-        ]);
-    };
+      setHospitalCoords(mapped);
+    } catch {
+      // Hospital coordinates are optional; cards still render with call/map actions.
+    }
+  };
 
-    const openEvacuationMap = () => Linking.openURL('https://www.google.com/maps/search/evacuation+center+near+me+Philippines');
-    const openDisasterInfo = (type: string) => {
-        const urls: Record<string, string> = {
-            Typhoon: 'https://bagong.pagasa.dost.gov.ph',
-            Flood: 'https://ndrrmc.gov.ph',
-            Earthquake: 'https://phivolcs.dost.gov.ph',
-            Fire: 'https://www.bfp.gov.ph',
-        };
-        Linking.openURL(urls[type] || 'https://ndrrmc.gov.ph');
-    };
-
-    return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
-
-            {/* ── Countdown Overlay ── */}
-            {sosCountdown !== null && (
-                <Animated.View entering={FadeIn.duration(200)} style={styles.countdownOverlay}>
-                    <View style={styles.countdownIconWrap}>
-                        <Ionicons name="warning" size={44} color={Colors.white} />
-                    </View>
-                    <Text style={styles.countdownTitle}>EMERGENCY DETECTED</Text>
-                    <Text style={styles.countdownSub}>Calling 911 in</Text>
-                    <Text style={styles.countdownNumber}>{sosCountdown}</Text>
-                    <TouchableOpacity style={styles.cancelButton} onPress={cancelSOS} activeOpacity={0.85}>
-                        <Ionicons name="close-circle" size={20} color={Colors.error} />
-                        <Text style={styles.cancelButtonText}>CANCEL</Text>
-                    </TouchableOpacity>
-                </Animated.View>
-            )}
-
-            {/* ── Header ── */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-                    <Ionicons name="arrow-back" size={22} color={Colors.error} />
-                </TouchableOpacity>
-                <View style={{ flex: 1 }}>
-                    <Text style={styles.headerTitle}>Emergency</Text>
-                    <Text style={styles.headerSub}>Tools, contacts & disaster info</Text>
-                </View>
-                <View style={styles.alertBadge}>
-                    <Ionicons name="shield-checkmark" size={14} color={Colors.error} />
-                    <Text style={styles.alertBadgeText}>READY</Text>
-                </View>
-            </View>
-
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-
-                {/* ── SOS Button ── */}
-                <Animated.View entering={FadeInUp.duration(500).delay(80)} style={styles.sosSection}>
-                    <Text style={styles.sosHint}>TAP FOR IMMEDIATE HELP</Text>
-                    <View style={styles.glowWrap}>
-                        <Animated.View style={[styles.glowRing, glowStyle]} />
-                        <AnimatedTouchable
-                            style={[styles.sosButton, sosPulseStyle]}
-                            onPress={() => Linking.openURL('tel:911')}
-                            activeOpacity={0.88}
-                        >
-                            <Ionicons name="call" size={28} color={Colors.white} style={{ marginBottom: 4 }} />
-                            <Text style={styles.sosText}>SOS</Text>
-                            <Text style={styles.sosSub}>CALL 911</Text>
-                        </AnimatedTouchable>
-                    </View>
-                    <Text style={styles.sosCaption}>
-                        Tap to call PH Emergency Hotline <Text style={{ fontWeight: '800', color: Colors.textPrimary }}>911</Text>
-                    </Text>
-                    {/* NDRRMC Hotline */}
-                    <TouchableOpacity style={styles.ndrrmcBtn} onPress={() => Linking.openURL('tel:8888')} activeOpacity={0.85}>
-                        <Ionicons name="shield-half" size={16} color={Colors.error} />
-                        <Text style={styles.ndrrmcBtnText}>NDRRMC Hotline: <Text style={{ color: Colors.error }}>8888</Text></Text>
-                    </TouchableOpacity>
-                </Animated.View>
-
-                {/* ── Quick Tools ── */}
-                <Animated.View entering={FadeInUp.duration(500).delay(160)} style={styles.quickRow}>
-                    <TouchableOpacity style={[styles.quickCard, isListening && styles.qActive]} onPress={toggleAutoDetection} activeOpacity={0.82}>
-                        <RNAnimated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                            <View style={[styles.qIcon, isListening && styles.qIconActive]}>
-                                <Ionicons name={isListening ? 'mic' : 'mic-off-outline'} size={22} color={isListening ? Colors.white : Colors.error} />
-                            </View>
-                        </RNAnimated.View>
-                        <Text style={[styles.qLabel, isListening && { color: Colors.error }]}>Auto-SOS</Text>
-                        <Text style={styles.qSub}>{isListening ? 'Listening...' : 'Voice detect'}</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={[styles.quickCard, isSirenActive && styles.qSirenActive]} onPress={() => setIsSirenActive(!isSirenActive)} activeOpacity={0.82}>
-                        <RNAnimated.View style={{ transform: [{ scale: sirenAnim }] }}>
-                            <View style={[styles.qIcon, isSirenActive && styles.qIconSiren]}>
-                                <Ionicons name="megaphone" size={22} color={isSirenActive ? Colors.white : Colors.error} />
-                            </View>
-                        </RNAnimated.View>
-                        <Text style={[styles.qLabel, isSirenActive && { color: Colors.error }]}>Siren</Text>
-                        <Text style={styles.qSub}>{isSirenActive ? 'ACTIVE' : 'Tap to play'}</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.quickCard} onPress={openEvacuationMap} activeOpacity={0.82}>
-                        <View style={styles.qIcon}>
-                            <Ionicons name="navigate-outline" size={22} color={Colors.error} />
-                        </View>
-                        <Text style={styles.qLabel}>Shelters</Text>
-                        <Text style={styles.qSub}>Find nearby</Text>
-                    </TouchableOpacity>
-                </Animated.View>
-
-                {/* ── Disaster Evacuation ── */}
-                <Animated.View entering={FadeInUp.duration(500).delay(240)} style={styles.card}>
-                    <View style={styles.cardHead}>
-                        <View style={styles.cardTitleRow}>
-                            <View style={[styles.cardIcon, { backgroundColor: Colors.errorBg }]}>
-                                <Ionicons name="warning-outline" size={17} color={Colors.error} />
-                            </View>
-                            <Text style={styles.cardTitle}>Disaster Evacuation</Text>
-                        </View>
-                    </View>
-
-                    {/* Disaster type buttons */}
-                    <View style={styles.disasterGrid}>
-                        {DISASTER_TYPES.map((d) => (
-                            <TouchableOpacity
-                                key={d.label}
-                                style={[styles.disasterBtn, activeDisaster === d.label && { borderColor: d.color, borderWidth: 2 }]}
-                                onPress={() => { setActiveDisaster(d.label === activeDisaster ? null : d.label); openDisasterInfo(d.label); }}
-                                activeOpacity={0.8}
-                            >
-                                <View style={[styles.disasterIcon, { backgroundColor: d.bg }]}>
-                                    <Ionicons name={d.icon as any} size={24} color={d.color} />
-                                </View>
-                                <Text style={styles.disasterLabel}>{d.label}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-
-                    {/* Evacuation actions */}
-                    <TouchableOpacity style={styles.evacuateBtn} onPress={openEvacuationMap} activeOpacity={0.85}>
-                        <Ionicons name="map-outline" size={18} color={Colors.white} />
-                        <Text style={styles.evacuateBtnText}>Find Evacuation Shelters</Text>
-                        <Ionicons name="chevron-forward" size={16} color={Colors.white} />
-                    </TouchableOpacity>
-
-                    <View style={styles.checklistBox}>
-                        <Text style={styles.checklistTitle}>⚡ Quick Evacuation Checklist</Text>
-                        {[
-                            'Grab medications & medical ID',
-                            'Take important documents',
-                            'Bring phone charger & water',
-                            'Tell someone your route',
-                            'Follow official evacuation signs',
-                        ].map((item, i) => (
-                            <View key={i} style={styles.checkItem}>
-                                <View style={styles.checkDot} />
-                                <Text style={styles.checkText}>{item}</Text>
-                            </View>
-                        ))}
-                    </View>
-                </Animated.View>
-
-                {/* ── Medical ID ── */}
-                <Animated.View entering={FadeInUp.duration(500).delay(320)} style={styles.card}>
-                    <View style={styles.cardHead}>
-                        <View style={styles.cardTitleRow}>
-                            <View style={[styles.cardIcon, { backgroundColor: Colors.errorBg }]}>
-                                <Ionicons name="medical" size={17} color={Colors.error} />
-                            </View>
-                            <Text style={styles.cardTitle}>Medical ID</Text>
-                        </View>
-                        <TouchableOpacity style={styles.editPill} onPress={isEditingMedical ? saveMedicalInfo : () => setIsEditingMedical(true)}>
-                            <Ionicons name={isEditingMedical ? 'checkmark' : 'create-outline'} size={13} color={Colors.error} />
-                            <Text style={styles.editPillText}>{isEditingMedical ? 'Save' : 'Edit'}</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {isEditingMedical ? (
-                        <View style={styles.formStack}>
-                            {[{ ph: 'Full Name', key: 'name' }, { ph: 'Blood Type (e.g. A+)', key: 'bloodType' }, { ph: 'Allergies', key: 'allergies' }, { ph: 'Medical Conditions', key: 'conditions' }].map(f => (
-                                <TextInput key={f.key} style={styles.input} placeholder={f.ph} placeholderTextColor={Colors.textTertiary}
-                                    value={(medicalInfo as any)[f.key]} onChangeText={t => setMedicalInfo({ ...medicalInfo, [f.key]: t })} />
-                            ))}
-                            <TextInput style={[styles.input, { height: 76, textAlignVertical: 'top' }]} placeholder="Medications / Notes" placeholderTextColor={Colors.textTertiary}
-                                multiline value={medicalInfo.medications} onChangeText={t => setMedicalInfo({ ...medicalInfo, medications: t })} />
-                        </View>
-                    ) : (
-                        <View>
-                            {[
-                                { icon: 'person-outline', label: 'Name', value: medicalInfo.name },
-                                { icon: 'water-outline', label: 'Blood Type', value: medicalInfo.bloodType, red: true },
-                                { icon: 'alert-circle-outline', label: 'Allergies', value: medicalInfo.allergies || 'None' },
-                                { icon: 'fitness-outline', label: 'Conditions', value: medicalInfo.conditions || 'None' },
-                            ].map((r, i, arr) => (
-                                <View key={r.label} style={[styles.medRow, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
-                                    <View style={styles.medLeft}>
-                                        <Ionicons name={r.icon as any} size={13} color={Colors.textSecondary} />
-                                        <Text style={styles.medLabel}>{r.label}</Text>
-                                    </View>
-                                    <Text style={[styles.medVal, r.red && !!r.value && { color: Colors.error, fontWeight: '900', fontSize: 17 }]}>{r.value || '--'}</Text>
-                                </View>
-                            ))}
-                            {!!medicalInfo.medications && (
-                                <View style={[styles.medRow, { borderBottomWidth: 0 }]}>
-                                    <View style={styles.medLeft}><Ionicons name="document-text-outline" size={13} color={Colors.textSecondary} /><Text style={styles.medLabel}>Notes</Text></View>
-                                    <Text style={[styles.medVal, { maxWidth: '58%', textAlign: 'right' }]}>{medicalInfo.medications}</Text>
-                                </View>
-                            )}
-                        </View>
-                    )}
-                </Animated.View>
-
-                {/* ── Emergency Contacts ── */}
-                <Animated.View entering={FadeInUp.duration(500).delay(400)} style={styles.card}>
-                    <View style={styles.cardHead}>
-                        <View style={styles.cardTitleRow}>
-                            <View style={[styles.cardIcon, { backgroundColor: Colors.errorBg }]}>
-                                <Ionicons name="people" size={17} color={Colors.error} />
-                            </View>
-                            <Text style={styles.cardTitle}>Emergency Contacts</Text>
-                        </View>
-                        <TouchableOpacity style={[styles.addPill, isAddingContact && styles.addPillCancel]} onPress={() => setIsAddingContact(!isAddingContact)}>
-                            <Ionicons name={isAddingContact ? 'close' : 'add'} size={14} color={isAddingContact ? Colors.textSecondary : Colors.white} />
-                            <Text style={[styles.addPillText, isAddingContact && { color: Colors.textSecondary }]}>{isAddingContact ? 'Cancel' : 'Add'}</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {isAddingContact && (
-                        <Animated.View entering={FadeInDown.duration(350)} style={styles.formStack}>
-                            <TextInput style={styles.input} placeholder="Contact Name" placeholderTextColor={Colors.textTertiary} value={newName} onChangeText={setNewName} />
-                            <TextInput style={styles.input} placeholder="Phone Number" placeholderTextColor={Colors.textTertiary} keyboardType="phone-pad" value={newPhone} onChangeText={setNewPhone} />
-                            <TouchableOpacity style={styles.saveBtn} onPress={addContact} activeOpacity={0.85}>
-                                <Ionicons name="checkmark-circle" size={18} color={Colors.white} />
-                                <Text style={styles.saveBtnText}>Save Contact</Text>
-                            </TouchableOpacity>
-                        </Animated.View>
-                    )}
-
-                    {contacts.map((contact, i) => (
-                        <Animated.View key={contact.id} entering={FadeInUp.duration(400).delay(i * 70)}>
-                            <TouchableOpacity style={styles.contactRow} onPress={() => Linking.openURL(`tel:${contact.phone}`)} onLongPress={() => deleteContact(contact.id)} activeOpacity={0.82}>
-                                <View style={styles.contactAvi}>
-                                    <Text style={styles.contactInitial}>{contact.name.charAt(0).toUpperCase()}</Text>
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.contactName}>{contact.name}</Text>
-                                    <Text style={styles.contactPhone}>{contact.phone}</Text>
-                                </View>
-                                <View style={styles.callBtn}>
-                                    <Ionicons name="call" size={18} color={Colors.white} />
-                                </View>
-                            </TouchableOpacity>
-                        </Animated.View>
-                    ))}
-
-                    {contacts.length === 0 && !isAddingContact && (
-                        <View style={styles.emptyWrap}>
-                            <Ionicons name="people-outline" size={32} color={Colors.primaryLight} />
-                            <Text style={styles.emptyText}>No contacts yet</Text>
-                            <Text style={styles.emptySub}>Add family members to alert during emergencies</Text>
-                        </View>
-                    )}
-                </Animated.View>
-
-                <View style={{ height: 48 }} />
-            </ScrollView>
-        </SafeAreaView>
+  const saveContacts = async (next: EmergencyContact[]) => {
+    await AsyncStorage.setItem(
+      getUserScopedKey(CONTACTS_KEY),
+      JSON.stringify(next),
     );
+    setContacts(next);
+  };
+
+  const saveMedicalInfo = async () => {
+    try {
+      await AsyncStorage.setItem(
+        getUserScopedKey(MEDICAL_ID_KEY),
+        JSON.stringify(medicalInfo),
+      );
+
+      // Keep shared profile fields aligned with handoff edits.
+      const existingProfileRaw = await AsyncStorage.getItem(
+        getProfileStorageKey(),
+      );
+      const existingProfile = existingProfileRaw
+        ? JSON.parse(existingProfileRaw)
+        : {};
+
+      const nameParts = medicalInfo.name.trim().split(/\s+/);
+      const firstName = nameParts[0] || existingProfile.firstName || "";
+      const lastName =
+        nameParts.slice(1).join(" ") || existingProfile.lastName || "";
+
+      await AsyncStorage.setItem(
+        getProfileStorageKey(),
+        JSON.stringify({
+          ...existingProfile,
+          firstName,
+          lastName,
+          bloodType: medicalInfo.bloodType,
+          allergies: medicalInfo.allergies,
+          conditions: medicalInfo.conditions,
+        }),
+      );
+
+      setIsEditingMedical(false);
+      Alert.alert(
+        "Medical profile saved",
+        "Your hospital handoff profile is updated.",
+      );
+    } catch {
+      Alert.alert("Save failed", "Unable to save medical profile right now.");
+    }
+  };
+
+  const checkSmsAvailability = async () => {
+    try {
+      setIsSmsAvailable(await SMS.isAvailableAsync());
+    } catch {
+      setIsSmsAvailable(false);
+    }
+  };
+
+  const getLocationLink = async (): Promise<string> => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        return "";
+      }
+      const current = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      return `https://maps.google.com/?q=${current.coords.latitude},${current.coords.longitude}`;
+    } catch {
+      return "";
+    }
+  };
+
+  const startSOSCountdown = () => {
+    if (sosCountdown !== null) {
+      return;
+    }
+
+    setSosCountdown(8);
+    let remaining = 8;
+
+    timerRef.current = setInterval(() => {
+      remaining -= 1;
+      setSosCountdown(remaining);
+
+      if (remaining <= 0) {
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+        }
+        setSosCountdown(null);
+        void executeSos();
+      }
+    }, 1000);
+  };
+
+  const cancelSOS = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    setSosCountdown(null);
+  };
+
+  const sendHospitalAlertSms = async () => {
+    if (!isSmsAvailable || contacts.length === 0) {
+      Alert.alert(
+        "SMS unavailable",
+        "Add contacts and enable SMS capability on this device.",
+      );
+      return;
+    }
+
+    const locationLink = await getLocationLink();
+    const triage = triageState?.label ?? "Unknown";
+    const message = [
+      "Hospital alert from ClarifyApp.",
+      `Patient: ${medicalInfo.name || "Unknown"}`,
+      `Triage: ${triage}`,
+      `Blood type: ${medicalInfo.bloodType || "Not set"}`,
+      `Allergies: ${medicalInfo.allergies || "None listed"}`,
+      `Conditions: ${medicalInfo.conditions || "None listed"}`,
+      `Meds: ${medicalInfo.medications || "None listed"}`,
+      locationLink ? `Location: ${locationLink}` : "Location: unavailable",
+    ].join("\n");
+
+    try {
+      await SMS.sendSMSAsync(
+        contacts.map((contact: EmergencyContact) => contact.phone),
+        message,
+      );
+    } catch {
+      Alert.alert("SMS error", "Could not send hospital alert to contacts.");
+    }
+  };
+
+  const executeSos = async () => {
+    await sendHospitalAlertSms();
+    setTimeout(() => {
+      void Linking.openURL("tel:911");
+    }, 350);
+  };
+
+  const addContact = () => {
+    const name = newName.trim();
+    const phone = newPhone.trim();
+
+    if (!name || !phone) {
+      Alert.alert("Missing information", "Enter a name and a phone number.");
+      return;
+    }
+
+    void saveContacts([
+      ...contacts,
+      {
+        id: Date.now().toString(),
+        name,
+        phone,
+      },
+    ]);
+
+    setNewName("");
+    setNewPhone("");
+    setIsAddingContact(false);
+  };
+
+  const removeContact = (id: string) => {
+    Alert.alert("Remove contact", "Delete this emergency contact?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          void saveContacts(contacts.filter((contact) => contact.id !== id));
+        },
+      },
+    ]);
+  };
+
+  const openHospitalMap = async (query: string) => {
+    const locationLink = await getLocationLink();
+    const encodedQuery = encodeURIComponent(query);
+
+    const searchUrl = locationLink
+      ? `https://www.google.com/maps/search/${encodedQuery}/@${locationLink.split("=")[1]}`
+      : `https://www.google.com/maps/search/${encodedQuery}`;
+
+    void Linking.openURL(searchUrl);
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={["left", "right", "bottom"]}>
+      <StatusBar barStyle="light-content" backgroundColor="#0B4A6F" />
+
+      {sosCountdown !== null && (
+        <Animated.View entering={FadeIn.duration(160)} style={styles.overlay}>
+          <View style={styles.overlayBadge}>
+            <Ionicons name="pulse" size={26} color={Colors.white} />
+            <Text style={styles.overlayBadgeText}>TRAUMA RESPONSE</Text>
+          </View>
+          <Text style={styles.overlayTitle}>Dispatching emergency call</Text>
+          <Text style={styles.overlayLabel}>Calling 911 in</Text>
+          <Text style={styles.overlayCount}>{sosCountdown}</Text>
+          <TouchableOpacity
+            style={styles.overlayCancel}
+            onPress={cancelSOS}
+            activeOpacity={0.9}
+          >
+            <Ionicons name="close-circle" size={18} color="#0F172A" />
+            <Text style={styles.overlayCancelText}>Cancel alert</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
+      <AppHeader
+        title="Hospital Emergency Desk"
+        subtitle="Rapid triage, dispatch, and patient handoff"
+        onBack={() => router.back()}
+        rightLabel="LIVE"
+      />
+
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View entering={FadeInUp.duration(300)} style={styles.sosCard}>
+          <Text style={styles.sosTitle}>Critical Response</Text>
+          <Text style={styles.sosDescription}>
+            Use this when patient status is severe or rapidly declining.
+          </Text>
+          <TouchableOpacity
+            style={styles.sosButton}
+            onPress={startSOSCountdown}
+            activeOpacity={0.9}
+          >
+            <Ionicons name="call" size={22} color={Colors.white} />
+            <Text style={styles.sosButtonText}>Activate SOS and Call 911</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => void sendHospitalAlertSms()}
+            activeOpacity={0.9}
+          >
+            <Ionicons name="chatbubbles-outline" size={20} color="#0B4A6F" />
+            <Text style={styles.secondaryButtonText}>
+              Send hospital alert SMS to contacts
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
+
+        <Animated.View
+          entering={FadeInUp.duration(350).delay(90)}
+          style={styles.card}
+        >
+          <Text style={styles.cardTitle}>Triage Level</Text>
+          <Text style={styles.cardHint}>
+            Set current patient urgency before transfer.
+          </Text>
+          <View style={styles.triageGrid}>
+            {TRIAGE_OPTIONS.map((option) => {
+              const active = triageLevel === option.level;
+              return (
+                <TouchableOpacity
+                  key={option.level}
+                  style={[
+                    styles.triageItem,
+                    {
+                      backgroundColor: option.bg,
+                      borderColor: active ? option.color : "transparent",
+                    },
+                  ]}
+                  onPress={() => setTriageLevel(option.level)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.triageLabel, { color: option.color }]}>
+                    {option.label}
+                  </Text>
+                  <Text style={styles.triageDetail}>{option.detail}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </Animated.View>
+
+        <Animated.View
+          entering={FadeInUp.duration(400).delay(140)}
+          style={styles.card}
+        >
+          <Text style={styles.cardTitle}>Nearest Hospital Units</Text>
+          <Text style={styles.cardHint}>
+            Live-sorted by your current location. Updated {lastHospitalUpdate}.
+          </Text>
+          {realtimeUnits.map((unit) => (
+            <View key={unit.name} style={styles.hospitalRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.hospitalName}>{unit.name}</Text>
+                <Text style={styles.hospitalService}>{unit.service}</Text>
+                <Text style={styles.hospitalPhone}>{unit.phone}</Text>
+                <Text style={styles.hospitalDistance}>
+                  {formatDistanceKm(unit.distanceKm)}
+                </Text>
+              </View>
+              <View style={styles.hospitalActions}>
+                <TouchableOpacity
+                  style={styles.unitAction}
+                  onPress={() => void Linking.openURL(`tel:${unit.phone}`)}
+                >
+                  <Ionicons name="call" size={18} color={Colors.white} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.unitAction, styles.mapAction]}
+                  onPress={() => void openHospitalMap(unit.mapQuery)}
+                >
+                  <Ionicons name="navigate" size={18} color="#0B4A6F" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </Animated.View>
+
+        <Animated.View
+          entering={FadeInUp.duration(460).delay(190)}
+          style={styles.card}
+        >
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Patient Medical Handoff</Text>
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={
+                isEditingMedical
+                  ? saveMedicalInfo
+                  : () => setIsEditingMedical(true)
+              }
+            >
+              <Ionicons
+                name={isEditingMedical ? "checkmark" : "create-outline"}
+                size={14}
+                color="#0B4A6F"
+              />
+              <Text style={styles.editButtonText}>
+                {isEditingMedical ? "Save" : "Edit"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {isEditingMedical ? (
+            <View style={styles.formStack}>
+              <TextInput
+                style={styles.input}
+                placeholder="Patient full name"
+                placeholderTextColor={Colors.textTertiary}
+                value={medicalInfo.name}
+                onChangeText={(text) =>
+                  setMedicalInfo({ ...medicalInfo, name: text })
+                }
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Blood type"
+                placeholderTextColor={Colors.textTertiary}
+                value={medicalInfo.bloodType}
+                onChangeText={(text) =>
+                  setMedicalInfo({ ...medicalInfo, bloodType: text })
+                }
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Allergies"
+                placeholderTextColor={Colors.textTertiary}
+                value={medicalInfo.allergies}
+                onChangeText={(text) =>
+                  setMedicalInfo({ ...medicalInfo, allergies: text })
+                }
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Medical conditions"
+                placeholderTextColor={Colors.textTertiary}
+                value={medicalInfo.conditions}
+                onChangeText={(text) =>
+                  setMedicalInfo({ ...medicalInfo, conditions: text })
+                }
+              />
+              <TextInput
+                style={[styles.input, styles.notesInput]}
+                placeholder="Current medications"
+                placeholderTextColor={Colors.textTertiary}
+                multiline
+                value={medicalInfo.medications}
+                onChangeText={(text) =>
+                  setMedicalInfo({ ...medicalInfo, medications: text })
+                }
+              />
+            </View>
+          ) : (
+            <View style={styles.detailStack}>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Patient</Text>
+                <Text style={styles.detailValue}>
+                  {medicalInfo.name || "--"}
+                </Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Blood Type</Text>
+                <Text style={[styles.detailValue, styles.bloodTypeValue]}>
+                  {medicalInfo.bloodType || "--"}
+                </Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Allergies</Text>
+                <Text style={styles.detailValue}>
+                  {medicalInfo.allergies || "None listed"}
+                </Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Conditions</Text>
+                <Text style={styles.detailValue}>
+                  {medicalInfo.conditions || "None listed"}
+                </Text>
+              </View>
+              <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
+                <Text style={styles.detailLabel}>Medications</Text>
+                <Text style={styles.detailValue}>
+                  {medicalInfo.medications || "None listed"}
+                </Text>
+              </View>
+            </View>
+          )}
+        </Animated.View>
+
+        <Animated.View
+          entering={FadeInDown.duration(460).delay(210)}
+          style={styles.card}
+        >
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Emergency Contacts</Text>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => setIsAddingContact((prev) => !prev)}
+            >
+              <Ionicons
+                name={isAddingContact ? "close" : "add"}
+                size={14}
+                color={Colors.white}
+              />
+              <Text style={styles.addButtonText}>
+                {isAddingContact ? "Cancel" : "Add"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {isAddingContact && (
+            <View style={styles.formStack}>
+              <TextInput
+                style={styles.input}
+                placeholder="Contact name"
+                placeholderTextColor={Colors.textTertiary}
+                value={newName}
+                onChangeText={setNewName}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Phone number"
+                placeholderTextColor={Colors.textTertiary}
+                keyboardType="phone-pad"
+                value={newPhone}
+                onChangeText={setNewPhone}
+              />
+              <TouchableOpacity style={styles.saveButton} onPress={addContact}>
+                <Ionicons
+                  name="checkmark-circle"
+                  size={16}
+                  color={Colors.white}
+                />
+                <Text style={styles.saveButtonText}>Save contact</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {contacts.map((contact) => (
+            <TouchableOpacity
+              key={contact.id}
+              style={styles.contactRow}
+              onPress={() => void Linking.openURL(`tel:${contact.phone}`)}
+              onLongPress={() => removeContact(contact.id)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.contactAvatar}>
+                <Text style={styles.contactInitial}>
+                  {contact.name.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.contactName}>{contact.name}</Text>
+                <Text style={styles.contactPhone}>{contact.phone}</Text>
+              </View>
+              <Ionicons name="call" size={18} color="#0B4A6F" />
+            </TouchableOpacity>
+          ))}
+
+          {contacts.length === 0 && !isAddingContact && (
+            <View style={styles.emptyState}>
+              <Ionicons
+                name="people-outline"
+                size={28}
+                color={Colors.textTertiary}
+              />
+              <Text style={styles.emptyTitle}>No emergency contacts</Text>
+              <Text style={styles.emptyHint}>
+                Add family or caregivers for rapid updates.
+              </Text>
+            </View>
+          )}
+        </Animated.View>
+
+        <Animated.View
+          entering={FadeInDown.duration(450).delay(250)}
+          style={styles.checklistCard}
+        >
+          <Text style={styles.cardTitle}>Hospital Transfer Checklist</Text>
+          {[
+            "Secure airway and stop severe bleeding before transport",
+            "Prepare government ID and insurance details",
+            "Bring current medications and recent prescriptions",
+            "Keep patient warm and monitor consciousness",
+          ].map((item) => (
+            <View key={item} style={styles.checkRow}>
+              <View style={styles.checkDot} />
+              <Text style={styles.checkText}>{item}</Text>
+            </View>
+          ))}
+        </Animated.View>
+
+        <View style={{ height: 44 }} />
+      </ScrollView>
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#FFF5F5' },
-
-    // Header
-    header: {
-        flexDirection: 'row', alignItems: 'center', gap: 14,
-        paddingHorizontal: 20, paddingTop: 24, paddingBottom: 16,
-        backgroundColor: Colors.surface,
-        borderBottomWidth: 2, borderBottomColor: Colors.error,
-    },
-    backBtn: {
-        width: 42, height: 42, borderRadius: 13,
-        backgroundColor: Colors.errorBg,
-        alignItems: 'center', justifyContent: 'center',
-    },
-    headerTitle: { fontSize: 22, fontWeight: '800', color: Colors.textPrimary },
-    headerSub: { fontSize: 13, fontWeight: '500', color: Colors.textSecondary, marginTop: 1 },
-    alertBadge: {
-        flexDirection: 'row', alignItems: 'center', gap: 5,
-        backgroundColor: Colors.errorBg, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
-        borderWidth: 1, borderColor: '#FECDD3',
-    },
-    alertBadgeText: { fontSize: 11, fontWeight: '800', color: Colors.error, letterSpacing: 0.5 },
-
-    scroll: { flex: 1 },
-    scrollContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 48 },
-
-    // SOS
-    sosSection: { alignItems: 'center', marginBottom: 28 },
-    sosHint: { fontSize: 11, fontWeight: '800', color: Colors.error, letterSpacing: 3, marginBottom: 22 },
-    glowWrap: { alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
-    glowRing: { position: 'absolute', width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(204,0,0,0.15)' },
-    sosButton: {
-        width: 152, height: 152, borderRadius: 76,
-        backgroundColor: Colors.error,
-        alignItems: 'center', justifyContent: 'center',
-        borderWidth: 5, borderColor: Colors.white,
-        shadowColor: Colors.error, shadowOpacity: 0.4, shadowRadius: 28, shadowOffset: { height: 6, width: 0 }, elevation: 18,
-    },
-    sosText: { fontSize: 46, fontWeight: '900', color: Colors.white, letterSpacing: 2, lineHeight: 50 },
-    sosSub: { fontSize: 12, fontWeight: '800', color: 'rgba(255,255,255,0.9)', letterSpacing: 2 },
-    sosCaption: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, textAlign: 'center', marginTop: 16 },
-    
-    ndrrmcBtn: {
-        flexDirection: 'row', alignItems: 'center', gap: 8,
-        backgroundColor: Colors.surface, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24,
-        marginTop: 12, borderWidth: 1, borderColor: Colors.border,
-        shadowColor: Shadows.small.shadowColor, shadowOpacity: Shadows.small.shadowOpacity, shadowRadius: Shadows.small.shadowRadius, shadowOffset: Shadows.small.shadowOffset, elevation: Shadows.small.elevation,
-    },
-    ndrrmcBtnText: { fontSize: 13, fontWeight: '700', color: Colors.textSecondary },
-
-    // Quick Actions
-    quickRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
-    quickCard: {
-        flex: 1, backgroundColor: Colors.surface, borderRadius: 18, padding: 16,
-        alignItems: 'center', gap: 6,
-        borderWidth: 1, borderColor: '#FECDD3',
-        shadowColor: Colors.error, shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { height: 2, width: 0 }, elevation: 2,
-    },
-    qActive: { borderColor: Colors.error, backgroundColor: Colors.errorBg },
-    qSirenActive: { borderColor: Colors.error, backgroundColor: Colors.errorBg },
-    qIcon: {
-        width: 48, height: 48, borderRadius: 24,
-        backgroundColor: Colors.errorBg, alignItems: 'center', justifyContent: 'center',
-    },
-    qIconActive: { backgroundColor: Colors.error },
-    qIconSiren: { backgroundColor: Colors.error },
-    qLabel: { fontSize: 13, fontWeight: '700', color: Colors.textPrimary },
-    qSub: { fontSize: 11, fontWeight: '500', color: Colors.textSecondary, textAlign: 'center' },
-
-    // Cards
-    card: {
-        backgroundColor: Colors.surface, borderRadius: 20, padding: 20,
-        marginBottom: 16, borderWidth: 1, borderColor: '#FECDD3',
-        shadowColor: Colors.error, shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { height: 2, width: 0 }, elevation: 2,
-    },
-    cardHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    cardIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-    cardTitle: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary },
-
-    editPill: {
-        flexDirection: 'row', alignItems: 'center', gap: 5,
-        backgroundColor: Colors.errorBg, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 12,
-    },
-    editPillText: { fontSize: 13, fontWeight: '700', color: Colors.error },
-
-    // Disaster section
-    disasterGrid: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-    disasterBtn: {
-        flex: 1, alignItems: 'center', gap: 8, padding: 12,
-        backgroundColor: '#FAFAFA', borderRadius: 16,
-        borderWidth: 1, borderColor: Colors.border,
-    },
-    disasterIcon: { width: 50, height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-    disasterLabel: { fontSize: 12, fontWeight: '700', color: Colors.textPrimary },
-
-    evacuateBtn: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-        gap: 8, backgroundColor: Colors.error,
-        padding: 14, borderRadius: 14, marginBottom: 16,
-    },
-    evacuateBtnText: { flex: 1, textAlign: 'center', color: Colors.white, fontWeight: '700', fontSize: 15 },
-
-    checklistBox: {
-        backgroundColor: Colors.errorBg, borderRadius: 14, padding: 16,
-        borderWidth: 1, borderColor: '#FECDD3',
-    },
-    checklistTitle: { fontSize: 13, fontWeight: '800', color: Colors.error, marginBottom: 10, letterSpacing: 0.3 },
-    checkItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 8 },
-    checkDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.error, marginTop: 5 },
-    checkText: { fontSize: 13, fontWeight: '600', color: '#374151', flex: 1, lineHeight: 20 },
-
-    // Medical
-    medRow: {
-        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-        paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: Colors.errorBg,
-    },
-    medLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-    medLabel: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-    medVal: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
-
-    // Forms
-    formStack: { gap: 10, marginTop: 4, marginBottom: 4 },
-    input: {
-        backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.border,
-        padding: 14, borderRadius: 14, fontSize: 15, color: Colors.textPrimary, fontWeight: '500',
-    },
-
-    // Contacts
-    addPill: {
-        flexDirection: 'row', alignItems: 'center', gap: 5,
-        backgroundColor: Colors.error, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12,
-    },
-    addPillCancel: { backgroundColor: Colors.border },
-    addPillText: { fontSize: 13, fontWeight: '700', color: Colors.white },
-    saveBtn: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-        gap: 8, backgroundColor: '#15803D', padding: 14, borderRadius: 14, marginTop: 2,
-    },
-    saveBtnText: { color: Colors.white, fontWeight: '700', fontSize: 15 },
-
-    contactRow: {
-        flexDirection: 'row', alignItems: 'center',
-        backgroundColor: '#FFF5F5', borderRadius: 16, padding: 14, marginBottom: 10,
-        borderWidth: 1, borderColor: '#FECDD3',
-    },
-    contactAvi: {
-        width: 46, height: 46, borderRadius: 23,
-        backgroundColor: Colors.error, alignItems: 'center', justifyContent: 'center', marginRight: 14,
-    },
-    contactInitial: { fontSize: 18, fontWeight: '800', color: Colors.white },
-    contactName: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, marginBottom: 2 },
-    contactPhone: { fontSize: 13, fontWeight: '500', color: Colors.textSecondary },
-    callBtn: {
-        width: 42, height: 42, borderRadius: 21,
-        backgroundColor: Colors.error, alignItems: 'center', justifyContent: 'center',
-    },
-
-    emptyWrap: { alignItems: 'center', paddingVertical: 28 },
-    emptyText: { fontSize: 15, fontWeight: '700', color: Colors.textTertiary, marginTop: 10 },
-    emptySub: { fontSize: 13, color: '#CBD5E1', textAlign: 'center', marginTop: 4, paddingHorizontal: 20 },
-
-    // Countdown Overlay
-    countdownOverlay: {
-        ...StyleSheet.absoluteFillObject, backgroundColor: Colors.error,
-        zIndex: 100, alignItems: 'center', justifyContent: 'center', padding: 24,
-    },
-    countdownIconWrap: {
-        width: 80, height: 80, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.2)',
-        alignItems: 'center', justifyContent: 'center', marginBottom: 16,
-    },
-    countdownTitle: { fontSize: 22, fontWeight: '900', color: Colors.white, letterSpacing: 1, textAlign: 'center', marginBottom: 8 },
-    countdownSub: { fontSize: 16, fontWeight: '600', color: 'rgba(255,255,255,0.85)', marginBottom: 4 },
-    countdownNumber: { fontSize: 110, fontWeight: '900', color: Colors.white, marginBottom: 40, lineHeight: 120 },
-    cancelButton: {
-        flexDirection: 'row', alignItems: 'center', gap: 8,
-        backgroundColor: Colors.white, paddingHorizontal: 40, paddingVertical: 16, borderRadius: 18,
-    },
-    cancelButtonText: { color: Colors.error, fontSize: 17, fontWeight: '900', letterSpacing: 0.5 },
+  container: {
+    flex: 1,
+    backgroundColor: "#EAF4FB",
+  },
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 24,
+    gap: 12,
+  },
+  sosCard: {
+    backgroundColor: "#0F172A",
+    borderRadius: 20,
+    padding: 18,
+  },
+  sosTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: Colors.white,
+  },
+  sosDescription: {
+    fontSize: 13,
+    color: "#CBD5E1",
+    marginTop: 4,
+    marginBottom: 12,
+    lineHeight: 18,
+  },
+  sosButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#B91C1C",
+    paddingVertical: 14,
+    borderRadius: 14,
+  },
+  sosButtonText: {
+    color: Colors.white,
+    fontWeight: "800",
+    fontSize: 15,
+  },
+  secondaryButton: {
+    marginTop: 10,
+    borderRadius: 14,
+    backgroundColor: "#E2EEF6",
+    paddingVertical: 12,
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  secondaryButtonText: {
+    color: "#0B4A6F",
+    fontWeight: "700",
+  },
+  card: {
+    backgroundColor: Colors.surface,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#D6E6F2",
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  cardHint: {
+    marginTop: 2,
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginBottom: 10,
+  },
+  triageGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  triageItem: {
+    width: "48.6%",
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 2,
+  },
+  triageLabel: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  triageDetail: {
+    fontSize: 11,
+    color: "#334155",
+    marginTop: 2,
+  },
+  hospitalRow: {
+    flexDirection: "row",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+    alignItems: "center",
+    gap: 8,
+  },
+  hospitalName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  hospitalService: {
+    fontSize: 12,
+    color: "#475569",
+    marginTop: 2,
+  },
+  hospitalPhone: {
+    fontSize: 12,
+    color: "#0B4A6F",
+    marginTop: 4,
+    fontWeight: "700",
+  },
+  hospitalDistance: {
+    marginTop: 4,
+    fontSize: 11,
+    color: "#1D4ED8",
+    fontWeight: "700",
+  },
+  hospitalActions: {
+    gap: 8,
+  },
+  unitAction: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#0B4A6F",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  mapAction: {
+    backgroundColor: "#DBEAFE",
+  },
+  cardHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  editButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#E2EEF6",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  editButtonText: {
+    fontWeight: "700",
+    color: "#0B4A6F",
+    fontSize: 12,
+  },
+  formStack: {
+    gap: 8,
+  },
+  input: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#D3E0EA",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    fontSize: 14,
+    color: "#0F172A",
+  },
+  notesInput: {
+    minHeight: 70,
+    textAlignVertical: "top",
+  },
+  detailStack: {
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+  },
+  detailLabel: {
+    fontSize: 12,
+    color: "#64748B",
+    fontWeight: "700",
+  },
+  detailValue: {
+    flex: 1,
+    fontSize: 13,
+    color: "#0F172A",
+    textAlign: "right",
+    fontWeight: "700",
+  },
+  bloodTypeValue: {
+    color: "#B91C1C",
+  },
+  addButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#0B4A6F",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  addButtonText: {
+    color: Colors.white,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  saveButton: {
+    marginTop: 2,
+    backgroundColor: "#1D4ED8",
+    borderRadius: 10,
+    paddingVertical: 11,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  saveButtonText: {
+    color: Colors.white,
+    fontWeight: "700",
+  },
+  contactRow: {
+    borderWidth: 1,
+    borderColor: "#D6E6F2",
+    borderRadius: 12,
+    padding: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 8,
+    backgroundColor: "#F8FBFF",
+  },
+  contactAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#0B4A6F",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  contactInitial: {
+    color: Colors.white,
+    fontWeight: "800",
+  },
+  contactName: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  contactPhone: {
+    fontSize: 12,
+    color: "#475569",
+    marginTop: 1,
+  },
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: 16,
+  },
+  emptyTitle: {
+    fontSize: 14,
+    color: "#0F172A",
+    fontWeight: "700",
+    marginTop: 8,
+  },
+  emptyHint: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  checklistCard: {
+    backgroundColor: "#F0F9FF",
+    borderColor: "#BAE6FD",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 15,
+  },
+  checkRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginTop: 9,
+  },
+  checkDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "#0369A1",
+    marginTop: 6,
+  },
+  checkText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#0F172A",
+    lineHeight: 18,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+    backgroundColor: "#991B1B",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  overlayBadge: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.2)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginBottom: 14,
+  },
+  overlayBadgeText: {
+    color: Colors.white,
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+  },
+  overlayTitle: {
+    color: Colors.white,
+    fontSize: 24,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  overlayLabel: {
+    color: "#FECACA",
+    marginTop: 12,
+    fontSize: 15,
+  },
+  overlayCount: {
+    fontSize: 100,
+    color: Colors.white,
+    fontWeight: "900",
+    lineHeight: 108,
+  },
+  overlayCancel: {
+    marginTop: 20,
+    backgroundColor: Colors.white,
+    borderRadius: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  overlayCancelText: {
+    color: "#0F172A",
+    fontWeight: "800",
+  },
 });

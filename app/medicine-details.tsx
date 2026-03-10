@@ -5,32 +5,32 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Image,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    Image,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { Colors } from "../constants/Colors";
 import {
-  MedicineAnalysis,
-  translateBatch,
-  translateText,
+    MedicineAnalysis,
+    translateBatch,
+    translateText,
 } from "../services/gemini";
 import { LANGUAGES, Language } from "../services/languages";
 import {
-  getActiveMedications,
-  updateMedicationInventory,
+    getActiveMedications,
+    updateMedicationInventory,
 } from "../services/medicationStorage";
 import { SavedScan } from "../services/storage";
 import { moderateScale, scale, verticalScale } from "../utils/responsive";
@@ -410,29 +410,51 @@ export default function MedicineDetailsScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Patient Badge (if found in prescription) */}
-              {(med.patientName || med.patientAge) && (
-                <View style={styles.patientCard}>
-                  <View style={styles.patientHeader}>
-                    <Ionicons name="person-circle" size={20} color="#64748B" />
-                    <Text style={styles.patientTitle}>PRESCRIBED TO</Text>
-                  </View>
-                  <Text style={styles.patientNameText}>
-                    {med.patientName || "Patient Not Specified"}
+              {/* Prescription identity summary */}
+              <View style={styles.rxDetailsCard}>
+                <Text style={styles.rxHeader}>PRESCRIPTION IDENTITY</Text>
+                <Text style={styles.rxSubtext}>
+                  Captured details from prescription scan
+                </Text>
+
+                <View style={styles.rxRow}>
+                  <Text style={styles.rxLabel}>Patient Name</Text>
+                  <Text style={styles.rxValue}>
+                    {med.patientName || "Not detected"}
                   </Text>
-                  <View style={styles.patientMetaRow}>
-                    <Text style={styles.patientMeta}>
-                      {med.patientAge ? `${med.patientAge} years old` : ""}
-                    </Text>
-                    {med.patientSex && (
-                      <Text style={styles.patientMeta}>
-                        {" "}
-                        • {med.patientSex}
-                      </Text>
-                    )}
-                  </View>
                 </View>
-              )}
+
+                {(med.patientAge || med.patientSex) && (
+                  <View style={styles.rxRow}>
+                    <Text style={styles.rxLabel}>Patient Info</Text>
+                    <Text style={styles.rxValue}>
+                      {med.patientAge ? `${med.patientAge} years old` : "--"}
+                      {med.patientSex ? `, ${med.patientSex}` : ""}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.rxRow}>
+                  <Text style={styles.rxLabel}>Doctor</Text>
+                  <Text style={styles.rxValue}>
+                    {med.prescribedBy || "Not detected"}
+                  </Text>
+                </View>
+
+                <View style={styles.rxRow}>
+                  <Text style={styles.rxLabel}>Clinic / Hospital</Text>
+                  <Text style={styles.rxValue}>
+                    {med.hospital || "Not detected"}
+                  </Text>
+                </View>
+
+                <View style={[styles.rxRow, styles.rxRowLast]}>
+                  <Text style={styles.rxLabel}>License No.</Text>
+                  <Text style={styles.rxValue}>
+                    {med.licenseNumber || "Not detected"}
+                  </Text>
+                </View>
+              </View>
 
               {/* Detail Cards */}
 
@@ -756,31 +778,6 @@ export default function MedicineDetailsScreen() {
                   );
                 })()}
               </View>
-
-              {/* Prescription Source Details */}
-              {(med.prescribedBy || med.hospital) && (
-                <View style={styles.rxDetailsCard}>
-                  <Text style={styles.rxHeader}>PRESCRIPTION SOURCE</Text>
-                  {med.prescribedBy && (
-                    <View style={styles.rxRow}>
-                      <Text style={styles.rxLabel}>Doctor</Text>
-                      <Text style={styles.rxValue}>{med.prescribedBy}</Text>
-                    </View>
-                  )}
-                  {med.hospital && (
-                    <View style={styles.rxRow}>
-                      <Text style={styles.rxLabel}>Hospital</Text>
-                      <Text style={styles.rxValue}>{med.hospital}</Text>
-                    </View>
-                  )}
-                  {med.licenseNumber && (
-                    <View style={styles.rxRow}>
-                      <Text style={styles.rxLabel}>License No.</Text>
-                      <Text style={styles.rxValue}>{med.licenseNumber}</Text>
-                    </View>
-                  )}
-                </View>
-              )}
             </View>
           );
         })}
@@ -1196,38 +1193,57 @@ const styles = StyleSheet.create({
   rxDetailsCard: {
     backgroundColor: "#FFFFFF",
     marginHorizontal: scale(16),
-    padding: 20,
-    borderRadius: 18,
+    padding: 16,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: Colors.border,
     marginBottom: 16,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   rxHeader: {
     fontSize: moderateScale(12),
     fontWeight: "800",
-    color: "#059669",
-    letterSpacing: 1.5,
-    marginBottom: 12,
+    color: Colors.textPrimary,
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  rxSubtext: {
+    fontSize: moderateScale(12),
+    color: Colors.textSecondary,
+    fontWeight: "500",
+    marginBottom: 10,
   },
   rxRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingVertical: 10,
+    alignItems: "center",
+    gap: scale(8),
+    paddingVertical: 9,
     borderBottomWidth: 1,
-    borderBottomColor: "#E1F8F2",
+    borderBottomColor: "#EEF2F7",
+  },
+  rxRowLast: {
+    borderBottomWidth: 0,
+    paddingBottom: 2,
   },
   rxLabel: {
-    fontSize: moderateScale(14),
+    fontSize: moderateScale(12),
     color: "#64748B",
-    fontWeight: "600",
+    fontWeight: "700",
+    minWidth: scale(104),
   },
   rxValue: {
     fontSize: moderateScale(14),
-    color: "#0F172A",
+    color: Colors.textPrimary,
     fontWeight: "700",
     textAlign: "right",
     flex: 1,
     marginLeft: 16,
+    lineHeight: 19,
   },
   actionSection: {
     paddingHorizontal: scale(16),

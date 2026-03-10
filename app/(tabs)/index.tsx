@@ -2,10 +2,9 @@ import { Ionicons } from "@expo/vector-icons";
 import NetInfo from "@react-native-community/netinfo";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Linking,
-  SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -22,7 +21,9 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
 import * as AppTheme from "../../constants/Colors";
+import { Radius, Spacing } from "../../constants/ui";
 import { moderateScale, scale, verticalScale } from "../../utils/responsive";
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
@@ -55,12 +56,12 @@ export default function App() {
     statusPulse.value = withRepeat(
       withSequence(
         withTiming(1.4, { duration: 1000 }),
-        withTiming(1, { duration: 1000 })
+        withTiming(1, { duration: 1000 }),
       ),
       -1,
-      true
+      true,
     );
-  }, []);
+  }, [statusPulse]);
 
   const statusDotStyle = useAnimatedStyle(() => ({
     transform: [{ scale: statusPulse.value }],
@@ -75,7 +76,7 @@ export default function App() {
   }, []);
 
   // Fetch location function
-  const fetchLocation = async () => {
+  const fetchLocation = useCallback(async () => {
     const { status } = await Location.getForegroundPermissionsAsync();
     setLocationActive(status === "granted");
 
@@ -114,15 +115,15 @@ export default function App() {
         setFetchingLocation(false);
       }
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchLocation();
+    void fetchLocation();
     const interval = setInterval(() => {
-      fetchLocation();
+      void fetchLocation();
     }, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchLocation]);
 
   const handleLocationEdit = () => {
     setShowLocationModal(true);
@@ -165,6 +166,14 @@ export default function App() {
       route: "/pharmacy-finder" as const,
       color: Colors.primary,
       status: "NEAR YOU",
+    },
+    {
+      title: "CareBot Chat",
+      subtitle: "AI health support",
+      icon: "chatbubble-ellipses-outline",
+      route: "/chatbot" as const,
+      color: Colors.primary,
+      status: "NEW",
     },
   ];
 
@@ -227,7 +236,11 @@ export default function App() {
                     ? "GPS Active"
                     : "GPS Off"}
             </Text>
-            <Ionicons name="chevron-forward" size={10} color={Colors.textTertiary} />
+            <Ionicons
+              name="chevron-forward"
+              size={10}
+              color={Colors.textTertiary}
+            />
           </TouchableOpacity>
         </Animated.View>
       </View>
@@ -253,16 +266,30 @@ export default function App() {
             >
               <View style={styles.cardContent}>
                 <View
-                  style={[styles.iconContainer, { backgroundColor: Colors.primaryBg }]}
+                  style={[
+                    styles.iconContainer,
+                    { backgroundColor: Colors.primaryBg },
+                  ]}
                 >
-                  <Ionicons name={item.icon as any} size={28} color={Colors.primary} />
+                  <Ionicons
+                    name={item.icon as any}
+                    size={28}
+                    color={Colors.primary}
+                  />
                 </View>
                 <View style={styles.moduleInfo}>
                   <Text style={styles.moduleTitle}>{item.title}</Text>
                   <Text style={styles.moduleSubtitle}>{item.subtitle}</Text>
+                  <View style={styles.statusBadge}>
+                    <Text style={styles.statusBadgeText}>{item.status}</Text>
+                  </View>
                 </View>
                 <View style={styles.arrowContainer}>
-                  <Ionicons name="chevron-forward" size={18} color={Colors.border} />
+                  <Ionicons
+                    name="chevron-forward"
+                    size={18}
+                    color={Colors.border}
+                  />
                 </View>
               </View>
             </AnimatedTouchable>
@@ -277,13 +304,22 @@ export default function App() {
             style={styles.modalCard}
           >
             <View style={styles.modalHeader}>
-              <View style={[styles.modalIconBg, { backgroundColor: Colors.primary }]}>
+              <View
+                style={[
+                  styles.modalIconBg,
+                  { backgroundColor: Colors.primary },
+                ]}
+              >
                 <Ionicons name="location" size={28} color={Colors.white} />
               </View>
               <Text style={styles.modalTitle}>LOCATION SERVICES</Text>
             </View>
             <View style={styles.addressCard}>
-              <Ionicons name="navigate-circle" size={24} color={Colors.textSecondary} />
+              <Ionicons
+                name="navigate-circle"
+                size={24}
+                color={Colors.textSecondary}
+              />
               <View style={{ flex: 1 }}>
                 <Text style={styles.addressLabel}>CURRENT ADDRESS</Text>
                 <Text style={styles.addressText}>
@@ -323,7 +359,7 @@ export default function App() {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 96 }}
@@ -341,27 +377,27 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     backgroundColor: Colors.surface,
-    paddingBottom: verticalScale(20),
+    paddingBottom: verticalScale(18),
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   header: {
-    paddingHorizontal: scale(24),
-    paddingTop: verticalScale(24),
-    paddingBottom: verticalScale(16),
+    paddingHorizontal: scale(16),
+    paddingTop: verticalScale(28),
+    paddingBottom: verticalScale(12),
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
   greetingText: {
-    fontSize: moderateScale(14),
+    fontSize: moderateScale(13),
     fontWeight: "600",
     color: Colors.primary,
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   brandLabel: {
-    fontSize: moderateScale(28),
+    fontSize: moderateScale(26),
     fontWeight: "900",
     color: Colors.textPrimary,
     letterSpacing: -1,
@@ -378,7 +414,7 @@ const styles = StyleSheet.create({
   },
   statusRow: {
     flexDirection: "row",
-    paddingHorizontal: scale(24),
+    paddingHorizontal: scale(16),
     gap: scale(10),
   },
   statusPill: {
@@ -386,8 +422,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: scale(6),
     paddingHorizontal: scale(12),
-    paddingVertical: verticalScale(8),
-    borderRadius: 12,
+    paddingVertical: verticalScale(7),
+    borderRadius: Radius.md,
     backgroundColor: Colors.surfaceHighlight,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -398,8 +434,8 @@ const styles = StyleSheet.create({
     gap: scale(6),
     flex: 1,
     paddingHorizontal: scale(12),
-    paddingVertical: verticalScale(8),
-    borderRadius: 12,
+    paddingVertical: verticalScale(7),
+    borderRadius: Radius.md,
     backgroundColor: Colors.surfaceHighlight,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -425,8 +461,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   sectionHeader: {
-    paddingHorizontal: scale(24),
-    paddingTop: verticalScale(28),
+    paddingHorizontal: scale(16),
+    paddingTop: verticalScale(22),
     paddingBottom: verticalScale(12),
   },
   sectionTitle: {
@@ -436,13 +472,13 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   gridContainer: {
-    paddingHorizontal: scale(24),
+    paddingHorizontal: scale(16),
     paddingTop: verticalScale(8),
   },
   moduleCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 20,
-    marginBottom: verticalScale(16),
+    borderRadius: Radius.lg,
+    marginBottom: verticalScale(12),
     borderWidth: 1,
     borderColor: Colors.border,
     shadowColor: Shadows.small.shadowColor,
@@ -454,13 +490,13 @@ const styles = StyleSheet.create({
   cardContent: {
     flexDirection: "row",
     alignItems: "center",
-    padding: scale(20),
-    gap: scale(16),
+    padding: scale(16),
+    gap: scale(12),
   },
   iconContainer: {
-    width: scale(56),
-    height: scale(56),
-    borderRadius: 16,
+    width: scale(52),
+    height: scale(52),
+    borderRadius: Radius.md,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
@@ -468,17 +504,33 @@ const styles = StyleSheet.create({
   },
   moduleInfo: {
     flex: 1,
-    gap: verticalScale(2),
+    gap: verticalScale(3),
   },
   moduleTitle: {
-    fontSize: moderateScale(17),
+    fontSize: moderateScale(16),
     fontWeight: "700",
     color: Colors.textPrimary,
   },
   moduleSubtitle: {
-    fontSize: moderateScale(14),
+    fontSize: moderateScale(13),
     fontWeight: "500",
     color: Colors.textSecondary,
+  },
+  statusBadge: {
+    alignSelf: "flex-start",
+    marginTop: 2,
+    backgroundColor: Colors.primaryBg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 999,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+  },
+  statusBadgeText: {
+    fontSize: moderateScale(10),
+    fontWeight: "800",
+    color: Colors.primary,
+    letterSpacing: 0.3,
   },
   arrowContainer: {
     width: scale(32),

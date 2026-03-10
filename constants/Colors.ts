@@ -1,5 +1,5 @@
-import { ColorSchemeName, useColorScheme } from 'react-native';
-import { Colors as ThemeColors } from './theme';
+import { ColorSchemeName, useColorScheme } from "react-native";
+import { Colors as ThemeColors } from "./theme";
 
 // This module provides a flat color palette that many components throughout the
 // app reference.  The original code used to import from
@@ -22,51 +22,67 @@ export const Colors: any = {
   ...ThemeColors.light,
 
   // convenience variants
-  primaryDark: '#1E293B',
-  primaryLight: '#60A5FA',
-  primaryBg: '#E0F2FE',
-  surface: '#FFFFFF',
-  surfaceHighlight: '#F8FAFC',
+  primary: "#123458",
+  primaryDark: "#0C223A",
+  primaryLight: "#4A7CA7",
+  secondary: "#2F8A69",
+  primaryBg: "#EAF1F7",
+  background: "#F7F9FC",
+  surface: "#FFFFFF",
+  surfaceHighlight: "#F2F5F9",
+  border: "#D7E0EA",
 
-  textPrimary: ThemeColors.light.text,
-  textSecondary: '#64748B',
-  textTertiary: '#94A3B8',
-  white: '#FFFFFF',
+  textPrimary: "#10243A",
+  textSecondary: "#4D6073",
+  textTertiary: "#7A8B9B",
+  white: "#FFFFFF",
 
-  error: ThemeColors.light.danger,
-  errorBg: '#FEE2E2',
-  errorBgLight: '#FEE2E2',
-  errorBorder: '#FCA5A5',
-  errorText: '#B91C1C',
+  error: "#C84B5A",
+  errorBg: "#FBECEF",
+  errorBgLight: "#FDF2F4",
+  errorBorder: "#F2C7CE",
+  errorText: "#A33342",
 
-  warning: '#F59E0B',
-  warningBg: '#FEF3C7',
-  warningBorder: '#FDE68A',
+  warning: "#B9892E",
+  warningBg: "#F8F1E3",
+  warningBorder: "#EAD8B3",
 
-  success: ThemeColors.light.success,
-  successBg: '#DCFCE7',
-  successBorder: '#A7F3D0',
+  success: "#2F8A69",
+  successBg: "#EAF7F1",
+  successBorder: "#BFE8D8",
 
   // extras imported by various components
-  accent: ThemeColors.light.accent,
-  tint: ThemeColors.light.tint,
-  icon: ThemeColors.light.icon,
-  tabIconDefault: ThemeColors.light.tabIconDefault,
-  tabIconSelected: ThemeColors.light.tabIconSelected,
+  accent: "#C6A96A",
+  tint: "#123458",
+  icon: "#5F7285",
+  tabIconDefault: "#8A9AAD",
+  tabIconSelected: "#123458",
 };
 
 // optional shadows used by a couple of components when the code does
 // `const Colors: any = (AppTheme as any).Colors ?? (AppTheme as any);`
 export const Shadows: any = {
-  small: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
-  medium: { shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.1, shadowRadius: 6, elevation: 4 },
+  small: {
+    shadowColor: "#0E243B",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  medium: {
+    shadowColor: "#0E243B",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
+  },
 };
 
 // helper hook; not used by many components but exported in case someone wants
 // to read the current colour scheme and pick values dynamically.
 export function useColors() {
-  const scheme: ColorSchemeName = useColorScheme() ?? 'light';
-  if (scheme === 'dark') {
+  const scheme: ColorSchemeName = useColorScheme() ?? "light";
+  if (scheme === "dark") {
     // very basic dark adjustments – most UI will still appear with the light
     // palette.  For full dark support components should call useThemeColor.
     return {

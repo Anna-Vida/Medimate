@@ -4,31 +4,34 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Alert,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    Image,
+    KeyboardAvoidingView,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import Animated, {
-  FadeInUp,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
+    FadeInUp,
+    useAnimatedStyle,
+    useSharedValue,
+    withTiming,
 } from "react-native-reanimated";
 import { Colors, Shadows } from "../../constants/Colors";
 import { getCurrentUser } from "../../services/authFacade";
+import {
+    clearCurrentUserScopedData,
+    getProfileStorageKey,
+    syncIdentityToProfile,
+} from "../../services/userProfile";
 import { moderateScale, scale, verticalScale } from "../../utils/responsive";
-
-const PROFILE_KEY = "user_profile";
 const PREF_NOTIFS = "pref_notifications";
 const PREF_VOICE = "pref_voice_assist";
 
@@ -353,11 +356,12 @@ const styles = StyleSheet.create({
   },
   quickRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: scale(12),
     marginBottom: verticalScale(16),
   },
   quickCard: {
-    flex: 1,
+    minWidth: "47%",
     backgroundColor: "#FFFFFF",
     borderRadius: 16,
     paddingVertical: verticalScale(14),
@@ -601,57 +605,16 @@ export default function ProfileScreen() {
   const loadProfile = async () => {
     try {
       const authUser = getCurrentUser();
-      const [data, storedName, storedPhone, storedEmail] = await Promise.all([
-        AsyncStorage.getItem(PROFILE_KEY),
-        AsyncStorage.getItem("user_name"),
-        AsyncStorage.getItem("user_phone"),
-        AsyncStorage.getItem("user_email"),
-      ]);
 
-      const base: UserProfile = data ? JSON.parse(data) : defaultProfile;
+      const synced = await syncIdentityToProfile({
+        email: authUser?.email,
+        fullName: authUser?.displayName,
+      });
 
-      // Merge data from multiple sources (AsyncStorage keys or Firebase Auth)
-      const updates: Partial<UserProfile> = {};
-
-      // 1. Sync Email (Always from Auth if possible, else AsyncStorage)
-      const effectiveEmail = authUser?.email || storedEmail || "";
-      if (effectiveEmail) updates.email = effectiveEmail;
-
-      // 2. Sync Name (If profile is currently blank)
-      const effectiveName = storedName || authUser?.displayName || "";
-      if (effectiveName && !base.firstName && !base.lastName) {
-        const nameParts = effectiveName.split(" ");
-        updates.firstName = nameParts[0] || "";
-        updates.lastName = nameParts.slice(1).join(" ") || "";
-      }
-
-      // 3. Sync Phone
-      if (storedPhone && !base.contactNumber) {
-        updates.contactNumber = storedPhone;
-      }
-
-      // 4. Self-healing: If we have Auth info but AsyncStorage was empty, save it now
-      if (authUser) {
-        if (authUser.email && !storedEmail) {
-          await AsyncStorage.setItem("user_email", authUser.email);
-        }
-        if (authUser.displayName && !storedName) {
-          await AsyncStorage.setItem("user_name", authUser.displayName);
-        }
-        // Also update the main profile object if it's currently empty
-        if (!data || !base.email || (!base.firstName && authUser.displayName)) {
-          const updatedProfile = {
-            ...base,
-            ...updates,
-          };
-          await AsyncStorage.setItem(
-            PROFILE_KEY,
-            JSON.stringify(updatedProfile),
-          );
-        }
-      }
-
-      setProfile({ ...base, ...updates });
+      setProfile({
+        ...defaultProfile,
+        ...(synced as Partial<UserProfile>),
+      });
     } catch (e) {
       console.error("Load profile error:", e);
     }
@@ -679,7 +642,10 @@ export default function ProfileScreen() {
     }
     try {
       setIsSaving(true);
-      await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+      await AsyncStorage.setItem(
+        getProfileStorageKey(),
+        JSON.stringify(profile),
+      );
       setIsEditing(false);
       setSavedToast(true);
       setTimeout(() => setSavedToast(false), 1500);
@@ -717,19 +683,21 @@ export default function ProfileScreen() {
       Alert.alert("Error", "Could not log out. Please try again.");
     }
   };
-  const clearProfile = async () => {
+
+  const resetCurrentAccountData = async () => {
     Alert.alert(
-      "Clear profile?",
-      "This will remove your saved profile information.",
+      "Reset current account data?",
+      "This clears scans, reminders, inventory, emergency contacts, and profile for only this logged-in account on this device.",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Clear",
+          text: "Reset",
           style: "destructive",
           onPress: async () => {
-            await AsyncStorage.removeItem(PROFILE_KEY);
+            await clearCurrentUserScopedData();
             setProfile(defaultProfile);
             setIsEditing(false);
+            Alert.alert("Done", "Current account local data has been reset.");
           },
         },
       ],
@@ -785,7 +753,7 @@ export default function ProfileScreen() {
         duration: 900,
       });
     }
-  }, [barWidth, completion]);
+  }, [barWidth, completion, fillWidth]);
 
   const pickAvatar = async () => {
     // Try expo-image-picker first (if installed), then expo-document-picker; otherwise show guidance
@@ -1050,6 +1018,15 @@ export default function ProfileScreen() {
               <Text style={styles.quickLabel}>SOS</Text>
               <Text style={styles.quickSub}>Emergency</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickCard}
+              onPress={() => router.push("/chatbot")}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="chatbubbles" size={18} color={Colors.primary} />
+              <Text style={styles.quickLabel}>CareBot</Text>
+              <Text style={styles.quickSub}>Ask AI</Text>
+            </TouchableOpacity>
           </Animated.View>
 
           {/* Personal */}
@@ -1304,11 +1281,11 @@ export default function ProfileScreen() {
             </View>
             <TouchableOpacity
               style={styles.dangerBtn}
-              onPress={clearProfile}
+              onPress={resetCurrentAccountData}
               activeOpacity={0.85}
             >
-              <Ionicons name="trash" size={16} color="#DC2626" />
-              <Text style={styles.dangerText}>Clear Profile Data</Text>
+              <Ionicons name="refresh-circle" size={16} color="#DC2626" />
+              <Text style={styles.dangerText}>Reset Current Account Data</Text>
             </TouchableOpacity>
           </Animated.View>
 

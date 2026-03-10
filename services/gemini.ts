@@ -1,154 +1,245 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import * as FileSystem from 'expo-file-system/legacy';
-import { Platform } from 'react-native';
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import * as FileSystem from "expo-file-system/legacy";
+import { Platform } from "react-native";
+import { callAiProxy, hasAiProxy } from "./aiProxy";
+import { isInternetAvailable } from "./network";
+import {
+    getOfflineDrugInteraction,
+    getOfflinePhilHealthInfo,
+} from "./offlineFallback";
 
 // ========== FRAUD DETECTION UTILITIES ==========
 function validatePRCLicense(licenseNumber?: string): boolean {
-    if (!licenseNumber) return false;
-    const numbers = licenseNumber.replace(/\D/g, '');
-    return numbers.length >= 6 && numbers.length <= 7;
+  if (!licenseNumber) return false;
+  const numbers = licenseNumber.replace(/\D/g, "");
+  return numbers.length >= 6 && numbers.length <= 7;
 }
 
 function calculateAuthenticityScore(medicine: any): any {
-    let score = 0;
-    const passedChecks: string[] = [];
-    const redFlags: string[] = [];
-    const recommendations: string[] = [];
+  let score = 0;
+  const passedChecks: string[] = [];
+  const redFlags: string[] = [];
+  const recommendations: string[] = [];
 
-    if (medicine.signatureVerified) {
-        score += 25;
-        passedChecks.push('Doctor signature verified');
-    } else {
-        redFlags.push('No visible doctor signature');
-    }
+  if (medicine.signatureVerified) {
+    score += 25;
+    passedChecks.push("Doctor signature verified");
+  } else {
+    redFlags.push("No visible doctor signature");
+  }
 
-    if (validatePRCLicense(medicine.licenseNumber)) {
-        score += 20;
-        passedChecks.push('Valid PRC license format');
-    } else if (medicine.licenseNumber) {
-        redFlags.push('Invalid PRC license number format');
-    } else {
-        redFlags.push('Missing PRC license number');
-    }
+  if (validatePRCLicense(medicine.licenseNumber)) {
+    score += 20;
+    passedChecks.push("Valid PRC license format");
+  } else if (medicine.licenseNumber) {
+    redFlags.push("Invalid PRC license number format");
+  } else {
+    redFlags.push("Missing PRC license number");
+  }
 
-    if (medicine.hospital) {
-        score += 15;
-        passedChecks.push('Hospital/clinic documented');
-    } else {
-        redFlags.push('No hospital or clinic name');
-    }
+  if (medicine.hospital) {
+    score += 15;
+    passedChecks.push("Hospital/clinic documented");
+  } else {
+    redFlags.push("No hospital or clinic name");
+  }
 
-    if (medicine.patientName && medicine.patientAge && medicine.patientSex) {
-        score += 15;
-        passedChecks.push('Complete patient information');
-    } else {
-        if (!medicine.patientName) redFlags.push('Missing patient name');
-        if (!medicine.patientAge) redFlags.push('Missing patient age');
-        if (!medicine.patientSex) redFlags.push('Missing patient sex');
-    }
+  if (medicine.patientName && medicine.patientAge && medicine.patientSex) {
+    score += 15;
+    passedChecks.push("Complete patient information");
+  } else {
+    if (!medicine.patientName) redFlags.push("Missing patient name");
+    if (!medicine.patientAge) redFlags.push("Missing patient age");
+    if (!medicine.patientSex) redFlags.push("Missing patient sex");
+  }
 
-    if (medicine.prescribedBy) {
-        score += 10;
-        passedChecks.push('Prescribing doctor identified');
-    } else {
-        redFlags.push('No prescribing doctor name');
-    }
+  if (medicine.prescribedBy) {
+    score += 10;
+    passedChecks.push("Prescribing doctor identified");
+  } else {
+    redFlags.push("No prescribing doctor name");
+  }
 
-    if (medicine.dosage && medicine.dosage !== 'Not visible') {
-        score += 10;
-        passedChecks.push('Dosage information present');
-    }
+  if (medicine.dosage && medicine.dosage !== "Not visible") {
+    score += 10;
+    passedChecks.push("Dosage information present");
+  }
 
-    if (medicine.prescribedBy && medicine.hospital && medicine.licenseNumber) {
-        score += 5;
-        passedChecks.push('Professional prescription format');
-    }
+  if (medicine.prescribedBy && medicine.hospital && medicine.licenseNumber) {
+    score += 5;
+    passedChecks.push("Professional prescription format");
+  }
 
-    let riskLevel: 'safe' | 'caution' | 'suspicious' | 'high-risk';
-    if (score >= 90) riskLevel = 'safe';
-    else if (score >= 70) riskLevel = 'caution';
-    else if (score >= 40) riskLevel = 'suspicious';
-    else riskLevel = 'high-risk';
+  let riskLevel: "safe" | "caution" | "suspicious" | "high-risk";
+  if (score >= 90) riskLevel = "safe";
+  else if (score >= 70) riskLevel = "caution";
+  else if (score >= 40) riskLevel = "suspicious";
+  else riskLevel = "high-risk";
 
-    if (riskLevel === 'high-risk') {
-        recommendations.push('DO NOT USE - Verify with healthcare provider immediately');
-        recommendations.push('Contact the hospital listed to confirm prescription');
-        recommendations.push('Report to PRC if suspected fraud');
-    } else if (riskLevel === 'suspicious') {
-        recommendations.push('Verify prescription with your pharmacist');
-        recommendations.push('Contact prescribing doctor to confirm');
-        recommendations.push('Check PRC license at: prc.gov.ph');
-    } else if (riskLevel === 'caution') {
-        recommendations.push('Ask your pharmacist to verify');
-        recommendations.push('Ensure prescription details are complete');
-    }
+  if (riskLevel === "high-risk") {
+    recommendations.push(
+      "DO NOT USE - Verify with healthcare provider immediately",
+    );
+    recommendations.push("Contact the hospital listed to confirm prescription");
+    recommendations.push("Report to PRC if suspected fraud");
+  } else if (riskLevel === "suspicious") {
+    recommendations.push("Verify prescription with your pharmacist");
+    recommendations.push("Contact prescribing doctor to confirm");
+    recommendations.push("Check PRC license at: prc.gov.ph");
+  } else if (riskLevel === "caution") {
+    recommendations.push("Ask your pharmacist to verify");
+    recommendations.push("Ensure prescription details are complete");
+  }
 
-    return { authenticityScore: score, riskLevel, redFlags, passedChecks, recommendations };
+  return {
+    authenticityScore: score,
+    riskLevel,
+    redFlags,
+    passedChecks,
+    recommendations,
+  };
 }
 // ========== END FRAUD DETECTION ==========
 
 // Initialize Gemini API
 const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-const genAI = new GoogleGenerativeAI(API_KEY || '');
+const genAI = new GoogleGenerativeAI(API_KEY || "");
+
+function shouldFallbackToOffline(error: unknown): boolean {
+  const text = String(error || "").toLowerCase();
+  return (
+    text.includes("429") ||
+    text.includes("quota") ||
+    text.includes("rate limit") ||
+    text.includes("resource_exhausted") ||
+    text.includes("api key") ||
+    text.includes("api_key") ||
+    text.includes("unauthenticated") ||
+    text.includes("permission denied") ||
+    text.includes("invalid key") ||
+    text.includes("key expired") ||
+    text.includes("401") ||
+    text.includes("403")
+  );
+}
+
+async function generateGeminiText(
+  prompt: string,
+  imageBase64?: string,
+): Promise<string> {
+  const online = await isInternetAvailable();
+  if (!online) {
+    throw new Error("OFFLINE_MODE");
+  }
+
+  if (hasAiProxy()) {
+    try {
+      return await callAiProxy({
+        task: "generate",
+        prompt,
+        imageBase64,
+        model: "gemini-2.5-flash",
+      });
+    } catch (error) {
+      if (shouldFallbackToOffline(error)) {
+        throw new Error("OFFLINE_MODE");
+      }
+      throw error;
+    }
+  }
+
+  if (!API_KEY) {
+    throw new Error("OFFLINE_MODE");
+  }
+
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    if (imageBase64) {
+      const result = await model.generateContent([
+        prompt,
+        {
+          inlineData: {
+            data: imageBase64,
+            mimeType: "image/jpeg",
+          },
+        },
+      ]);
+      return result.response.text().trim();
+    }
+
+    const result = await model.generateContent(prompt);
+    return result.response.text().trim();
+  } catch (error) {
+    if (shouldFallbackToOffline(error)) {
+      throw new Error("OFFLINE_MODE");
+    }
+    throw error;
+  }
+}
 
 export interface MedicineAnalysis {
-    medicineName: string;
-    activeIngredients: string;
-    commonUses: string;
-    dosage: string;
-    warnings: string;
-    sideEffects?: string;
-    recommendedTime?: string; // Format: "HH:MM" 24-hour
-    foodWarnings: string[]; // Foods/drinks to avoid
-    affordability?: AffordabilityInfo; // Philippines-specific affordability info
-    prescribedBy?: string; // Doctor's name if visible on prescription
-    hospital?: string; // Hospital/clinic name if visible
-    signatureVerified?: boolean; // true if doctor's signature is visible
-    licenseNumber?: string; // Doctor's PRC license number if visible
-    patientName?: string; // Patient's name if visible on prescription
-    patientAge?: string; // Patient's age if visible
-    patientSex?: string; // Patient's sex (M/F) if visible
-    fraudDetection?: FraudDetection; // Prescription authenticity analysis
-    simpleInstructions?: string; // VERY IMPORTANT: If this is a prescription label, translate any complex medical abbreviations (like '1 tab PO qd pc') into extremely simple, plain English instructions (e.g., 'Take 1 pill every morning after meals').
+  medicineName: string;
+  activeIngredients: string;
+  commonUses: string;
+  dosage: string;
+  warnings: string;
+  sideEffects?: string;
+  recommendedTime?: string; // Format: "HH:MM" 24-hour
+  foodWarnings: string[]; // Foods/drinks to avoid
+  affordability?: AffordabilityInfo; // Philippines-specific affordability info
+  prescribedBy?: string; // Doctor's name if visible on prescription
+  hospital?: string; // Hospital/clinic name if visible
+  signatureVerified?: boolean; // true if doctor's signature is visible
+  licenseNumber?: string; // Doctor's PRC license number if visible
+  patientName?: string; // Patient's name if visible on prescription
+  patientAge?: string; // Patient's age if visible
+  patientSex?: string; // Patient's sex (M/F) if visible
+  fraudDetection?: FraudDetection; // Prescription authenticity analysis
+  simpleInstructions?: string; // VERY IMPORTANT: If this is a prescription label, translate any complex medical abbreviations (like '1 tab PO qd pc') into extremely simple, plain English instructions (e.g., 'Take 1 pill every morning after meals').
 }
 
 export interface FraudDetection {
-    authenticityScore: number;      // 0-100%
-    riskLevel: 'safe' | 'caution' | 'suspicious' | 'high-risk';
-    redFlags: string[];             // List of suspicious findings
-    passedChecks: string[];         // List of validation checks passed
-    recommendations: string[];      // What to do if suspicious
+  authenticityScore: number; // 0-100%
+  riskLevel: "safe" | "caution" | "suspicious" | "high-risk";
+  redFlags: string[]; // List of suspicious findings
+  passedChecks: string[]; // List of validation checks passed
+  recommendations: string[]; // What to do if suspicious
 }
 
-
 export interface AffordabilityInfo {
-    genericAlternative?: string;        // "Amlodipine (Generika)"
-    estimatedSavings?: string;          // "₱135 per box"
-    seniorDiscountEligible: boolean;    // true for all medicines in PH
-    philHealthCoverage?: string;        // "Not covered" or "Z-Package eligible"
-    governmentPrograms: string[];       // ["PCSO", "DSWD AICS", "Malasakit"]
+  genericAlternative?: string; // "Amlodipine (Generika)"
+  estimatedSavings?: string; // "₱135 per box"
+  seniorDiscountEligible: boolean; // true for all medicines in PH
+  philHealthCoverage?: string; // "Not covered" or "Z-Package eligible"
+  governmentPrograms: string[]; // ["PCSO", "DSWD AICS", "Malasakit"]
 }
 
 export interface InteractionReport {
-    hasConflict: boolean;
-    severity: 'high' | 'medium' | 'low' | 'none';
-    description: string;
+  hasConflict: boolean;
+  severity: "high" | "medium" | "low" | "none";
+  description: string;
 }
 
 /**
  * Checks for contraindications between multiple medicines
  */
-export async function analyzeInteractions(medicines: MedicineAnalysis[]): Promise<InteractionReport> {
-    if (medicines.length < 2) {
-        return { hasConflict: false, severity: 'none', description: 'No interactions checked (single medicine).' };
-    }
+export async function analyzeInteractions(
+  medicines: MedicineAnalysis[],
+): Promise<InteractionReport> {
+  if (medicines.length < 2) {
+    return {
+      hasConflict: false,
+      severity: "none",
+      description: "No interactions checked (single medicine).",
+    };
+  }
 
-    try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+  try {
+    const medNames = medicines
+      .map((m) => `${m.medicineName} (${m.activeIngredients})`)
+      .join(", ");
 
-        const medNames = medicines.map(m => `${m.medicineName} (${m.activeIngredients})`).join(', ');
-
-        const prompt = `Analyze these medicines for harmful drug interactions (contraindications):
+    const prompt = `Analyze these medicines for harmful drug interactions (contraindications):
 ${medNames}
 
 Return ONLY a valid JSON object:
@@ -160,21 +251,36 @@ Return ONLY a valid JSON object:
 
 Start with "⚠️ WARNING:" in description if high risk.`;
 
-        const result = await model.generateContent(prompt);
-        const text = result.response.text();
-        const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        const parsed = JSON.parse(cleanText);
+    const text = await generateGeminiText(prompt);
+    const cleanText = text
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
+    const parsed = JSON.parse(cleanText);
 
-        return {
-            hasConflict: parsed.hasConflict || false,
-            severity: parsed.severity || 'none',
-            description: parsed.description || 'Analysis complete.',
-        };
-
-    } catch (error) {
-        console.error('Interaction check failed:', error);
-        return { hasConflict: false, severity: 'none', description: 'Could not check interactions.' };
+    return {
+      hasConflict: parsed.hasConflict || false,
+      severity: parsed.severity || "none",
+      description: parsed.description || "Analysis complete.",
+    };
+  } catch (error) {
+    if (String(error).includes("OFFLINE_MODE")) {
+      const first = medicines[0]?.medicineName ?? "";
+      const second = medicines[1]?.medicineName ?? "";
+      const offline = getOfflineDrugInteraction(first, second);
+      return {
+        hasConflict: !offline.isSafe,
+        severity: offline.isSafe ? "low" : "high",
+        description: `Offline check: ${offline.interaction}`,
+      };
     }
+    console.error("Interaction check failed:", error);
+    return {
+      hasConflict: false,
+      severity: "none",
+      description: "Could not check interactions.",
+    };
+  }
 }
 
 /**
@@ -182,54 +288,57 @@ Start with "⚠️ WARNING:" in description if high risk.`;
  * Works on both native and web.
  */
 async function uriToBase64(uri: string): Promise<string> {
-    if (Platform.OS === 'web') {
-        try {
-            const response = await fetch(uri);
-            const blob = await response.blob();
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    const base64data = reader.result as string;
-                    // Remove the data URL prefix (e.g. "data:image/jpeg;base64,") if present
-                    const base64 = base64data.includes(',') ? base64data.split(',')[1] : base64data;
-                    resolve(base64);
-                };
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-            });
-        } catch (error) {
-            console.error('Error converting URI to base64 on web:', error);
-            throw error;
-        }
-    } else {
-        return await FileSystem.readAsStringAsync(uri, {
-            encoding: 'base64',
-        });
+  if (Platform.OS === "web") {
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64data = reader.result as string;
+          // Remove the data URL prefix (e.g. "data:image/jpeg;base64,") if present
+          const base64 = base64data.includes(",")
+            ? base64data.split(",")[1]
+            : base64data;
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error("Error converting URI to base64 on web:", error);
+      throw error;
     }
+  } else {
+    return await FileSystem.readAsStringAsync(uri, {
+      encoding: "base64",
+    });
+  }
 }
 
 /**
  * Analyzes an image of medicine using Google Gemini Vision API
  * @param imageUri - Local file URI of the captured image
- * @param mode - Optional. If 'prescription', instructs the AI to focus on translating complex labels and handwriting. 
+ * @param mode - Optional. If 'prescription', instructs the AI to focus on translating complex labels and handwriting.
  * @returns Array of structured information about the identified medicines
  */
-export async function analyzeMedicineImage(imageUri: string, mode: 'pill' | 'prescription' = 'pill'): Promise<MedicineAnalysis[]> {
-    try {
-        // Read the image file as base64 - Cross-platform helper
-        const base64Image = await uriToBase64(imageUri);
+export async function analyzeMedicineImage(
+  imageUri: string,
+  mode: "pill" | "prescription" = "pill",
+): Promise<MedicineAnalysis[]> {
+  try {
+    // Read the image file as base64 - Cross-platform helper
+    const base64Image = await uriToBase64(imageUri);
 
-        // Initialize the Gemini model
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
-        const preamble = mode === 'prescription' 
-            ? `You are an expert pharmacist AI helping Filipino seniors decode complex prescription notes and labels. 
+    const preamble =
+      mode === "prescription"
+        ? `You are an expert pharmacist AI helping Filipino seniors decode complex prescription notes and labels. 
 Pay EXTREMELY CLOSE ATTENTION to handwriting, medical abbreviations (like 'po qid', 'prn', 'bid'), and doctor instructions.
-Your main goal is to extract the medicine and translate the dosage into plain, simple English instructions.` 
-            : `You are a medical assistant AI specialized in helping Filipino seniors. Analyze this image of medicine/medication.`;
+Your main goal is to extract the medicine and translate the dosage into plain, simple English instructions.`
+        : `You are a medical assistant AI specialized in helping Filipino seniors. Analyze this image of medicine/medication.`;
 
-        // Create the prompt for medicine identification
-        const prompt = `${preamble}
+    // Create the prompt for medicine identification
+    const prompt = `${preamble}
 If there are MULTIPLE medicines in the image, identify ALL of them independently.
 
 Return ONLY a valid JSON ARRAY of objects. Each object should have these exact keys:
@@ -267,114 +376,141 @@ IMPORTANT:
 If you cannot clearly identify the medicine, state that in the fields or provide partial info.
 Do NOT use Markdown code blocks. Just return the raw JSON ARRAY string.`;
 
-        // Send the image and prompt to Gemini
-        console.log(`Sending to Gemini... Payload size: ${(base64Image.length / 1024 / 1024).toFixed(2)} MB`);
-        const startTime = Date.now();
-        const result = await model.generateContent([
-            prompt,
-            {
-                inlineData: {
-                    data: base64Image,
-                    mimeType: 'image/jpeg',
-                },
-            },
-        ]);
+    // Send the image and prompt to Gemini
+    console.log(
+      `Sending to Gemini... Payload size: ${(base64Image.length / 1024 / 1024).toFixed(2)} MB`,
+    );
+    const startTime = Date.now();
+    const text = await generateGeminiText(prompt, base64Image);
 
-        const response = await result.response;
-        const text = response.text();
-
-        // Parse the response into structured format
-        return parseMedicineResponse(text);
-    } catch (error: any) {
-        console.error('Error analyzing medicine image:', error);
-        // Show the actual error message for debugging
-        const errorMessage = error?.message || error?.toString() || 'Unknown error';
-        console.error('Detailed error:', errorMessage);
-        throw new Error(`Failed to analyze: ${errorMessage}`);
+    // Parse the response into structured format
+    return parseMedicineResponse(text);
+  } catch (error: any) {
+    console.error("Error analyzing medicine image:", error);
+    if (String(error).includes("OFFLINE_MODE")) {
+      return [
+        {
+          medicineName: "Offline Scan Mode",
+          activeIngredients: "Not available offline",
+          commonUses:
+            "Image AI analysis requires internet. Use saved records or search medicine name in chatbot for local guidance.",
+          dosage: "Unknown",
+          warnings:
+            "Offline scan cannot verify medicine identity. Confirm with a pharmacist before taking medication.",
+          foodWarnings: [],
+          simpleInstructions:
+            "Reconnect to internet for accurate medicine identification.",
+        },
+      ];
     }
+    // Show the actual error message for debugging
+    const errorMessage = error?.message || error?.toString() || "Unknown error";
+    console.error("Detailed error:", errorMessage);
+    throw new Error(`Failed to analyze: ${errorMessage}`);
+  }
 }
 
 /**
  * Parses the AI response into a structured format
  */
 function parseMedicineResponse(text: string): MedicineAnalysis[] {
-    try {
-        // Clean the text to ensure it's valid JSON
-        let cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+  try {
+    // Clean the text to ensure it's valid JSON
+    let cleanText = text
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
 
-        // Gemini 2.5 sometimes adds parenthetical comments after JSON values
-        // e.g.  ["Alcohol"] (Can worsen dizziness...)  or  "value" (some note)
-        // Strip trailing (...) that appear after a JSON value token (], }, ", true, false, null, number)
-        cleanText = cleanText.replace(/(\]|"true"|"false"|"null"|"|\d)\s*\((?:[^)(]*|\([^)(]*\))*\)/g, '$1');
+    // Gemini 2.5 sometimes adds parenthetical comments after JSON values
+    // e.g.  ["Alcohol"] (Can worsen dizziness...)  or  "value" (some note)
+    // Strip trailing (...) that appear after a JSON value token (], }, ", true, false, null, number)
+    cleanText = cleanText.replace(
+      /(\]|"true"|"false"|"null"|"|\d)\s*\((?:[^)(]*|\([^)(]*\))*\)/g,
+      "$1",
+    );
 
-        const parsed = JSON.parse(cleanText);
+    const parsed = JSON.parse(cleanText);
 
-        const results: MedicineAnalysis[] = [];
+    const results: MedicineAnalysis[] = [];
 
-        // Handle if AI returns a single object instead of an array
-        const items = Array.isArray(parsed) ? parsed : [parsed];
+    // Handle if AI returns a single object instead of an array
+    const items = Array.isArray(parsed) ? parsed : [parsed];
 
-        for (const item of items) {
-            const medicine: MedicineAnalysis = {
-                medicineName: item.medicineName || 'Unknown Medicine',
-                activeIngredients: item.activeIngredients || 'Not identified',
-                commonUses: item.commonUses || 'Not available',
-                dosage: item.dosage || 'Not visible',
-                simpleInstructions: item.simpleInstructions || undefined,
-                warnings: item.warnings || 'Consult a doctor',
-                recommendedTime: item.recommendedTime || undefined,
-                foodWarnings: Array.isArray(item.foodWarnings) ? item.foodWarnings : [],
-                prescribedBy: item.prescribedBy || undefined,
-                hospital: item.hospital || undefined,
-                signatureVerified: item.signatureVerified || undefined,
-                licenseNumber: item.licenseNumber || undefined,
-                patientName: item.patientName || undefined,
-                patientAge: item.patientAge || undefined,
-                patientSex: item.patientSex || undefined,
-                affordability: item.affordability ? {
-                    genericAlternative: item.affordability.genericAlternative || null,
-                    estimatedSavings: item.affordability.estimatedSavings || null,
-                    seniorDiscountEligible: item.affordability.seniorDiscountEligible !== false, // default true
-                    philHealthCoverage: item.affordability.philHealthCoverage || null,
-                    governmentPrograms: Array.isArray(item.affordability.governmentPrograms) ? item.affordability.governmentPrograms : [],
-                } : {
-                    genericAlternative: null,
-                    estimatedSavings: null,
-                    seniorDiscountEligible: true,
-                    philHealthCoverage: null,
-                    governmentPrograms: [],
-                },
-                fraudDetection: undefined, // Will be calculated next
-            };
-
-            // Calculate fraud detection if prescription data exists
-            if (medicine.prescribedBy || medicine.hospital || medicine.licenseNumber || medicine.signatureVerified) {
-                medicine.fraudDetection = calculateAuthenticityScore(medicine);
+    for (const item of items) {
+      const medicine: MedicineAnalysis = {
+        medicineName: item.medicineName || "Unknown Medicine",
+        activeIngredients: item.activeIngredients || "Not identified",
+        commonUses: item.commonUses || "Not available",
+        dosage: item.dosage || "Not visible",
+        simpleInstructions: item.simpleInstructions || undefined,
+        warnings: item.warnings || "Consult a doctor",
+        recommendedTime: item.recommendedTime || undefined,
+        foodWarnings: Array.isArray(item.foodWarnings) ? item.foodWarnings : [],
+        prescribedBy: item.prescribedBy || undefined,
+        hospital: item.hospital || undefined,
+        signatureVerified: item.signatureVerified || undefined,
+        licenseNumber: item.licenseNumber || undefined,
+        patientName: item.patientName || undefined,
+        patientAge: item.patientAge || undefined,
+        patientSex: item.patientSex || undefined,
+        affordability: item.affordability
+          ? {
+              genericAlternative: item.affordability.genericAlternative || null,
+              estimatedSavings: item.affordability.estimatedSavings || null,
+              seniorDiscountEligible:
+                item.affordability.seniorDiscountEligible !== false, // default true
+              philHealthCoverage: item.affordability.philHealthCoverage || null,
+              governmentPrograms: Array.isArray(
+                item.affordability.governmentPrograms,
+              )
+                ? item.affordability.governmentPrograms
+                : [],
             }
+          : {
+              genericAlternative: null,
+              estimatedSavings: null,
+              seniorDiscountEligible: true,
+              philHealthCoverage: null,
+              governmentPrograms: [],
+            },
+        fraudDetection: undefined, // Will be calculated next
+      };
 
-            results.push(medicine);
-        }
+      // Calculate fraud detection if prescription data exists
+      if (
+        medicine.prescribedBy ||
+        medicine.hospital ||
+        medicine.licenseNumber ||
+        medicine.signatureVerified
+      ) {
+        medicine.fraudDetection = calculateAuthenticityScore(medicine);
+      }
 
-        return results;
-    } catch (e) {
-        console.error('Failed to parse Gemini JSON response:', text);
-        // Fallback to simple text extraction if JSON parsing fails
-        return [{
-            medicineName: 'Error parsing results',
-            activeIngredients: 'Could not structure the data',
-            commonUses: 'Please try again',
-            dosage: '',
-            simpleInstructions: '',
-            warnings: text.substring(0, 100) + '...', // Show raw text snippet
-            foodWarnings: [],
-        }];
+      results.push(medicine);
     }
+
+    return results;
+  } catch (e) {
+    console.error("Failed to parse Gemini JSON response:", text);
+    // Fallback to simple text extraction if JSON parsing fails
+    return [
+      {
+        medicineName: "Error parsing results",
+        activeIngredients: "Could not structure the data",
+        commonUses: "Please try again",
+        dosage: "",
+        simpleInstructions: "",
+        warnings: text.substring(0, 100) + "...", // Show raw text snippet
+        foodWarnings: [],
+      },
+    ];
+  }
 }
 
 export interface PersonInfo {
-    name: string;
-    relationship: string;
-    details: string;
+  name: string;
+  relationship: string;
+  details: string;
 }
 
 /**
@@ -382,11 +518,11 @@ export interface PersonInfo {
  * @param transcript - The transcribed voice note about a person
  * @returns Extracted name, relationship, and key details
  */
-export async function extractPersonInfo(transcript: string): Promise<PersonInfo> {
-    try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
-        const prompt = `Extract person information from this voice note. Return ONLY a JSON object with these fields:
+export async function extractPersonInfo(
+  transcript: string,
+): Promise<PersonInfo> {
+  try {
+    const prompt = `Extract person information from this voice note. Return ONLY a JSON object with these fields:
 - name: The person's name (first name, or full name if given)
 - relationship: How they relate to the speaker (e.g., "neighbor", "nurse's son", "grandchild")
 - details: Key memorable details about them
@@ -396,39 +532,44 @@ Voice note: "${transcript}"
 Respond with ONLY valid JSON, no markdown, no explanation. Example:
 {"name": "Mark", "relationship": "nurse's son", "details": "likes basketball"}`;
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text().trim();
+    const text = (await generateGeminiText(prompt)).trim();
 
-        // Clean up response - remove markdown code blocks if present
-        const cleanJson = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    // Clean up response - remove markdown code blocks if present
+    const cleanJson = text
+      .replace(/```json\n?/g, "")
+      .replace(/```\n?/g, "")
+      .trim();
 
-        try {
-            const parsed = JSON.parse(cleanJson);
-            return {
-                name: parsed.name || 'Unknown',
-                relationship: parsed.relationship || '',
-                details: parsed.details || '',
-            };
-        } catch {
-            // If JSON parsing fails, try to extract the name manually
-            const nameMatch = transcript.match(/(?:this is|i'm with|meet|called|named)\s+(\w+)/i);
-            return {
-                name: nameMatch ? nameMatch[1] : 'Unknown',
-                relationship: '',
-                details: transcript,
-            };
-        }
-    } catch (error) {
-        console.error('Error extracting person info:', error);
-        // Fallback: try simple name extraction
-        const nameMatch = transcript.match(/(?:this is|i'm with|meet|called|named)\s+(\w+)/i);
-        return {
-            name: nameMatch ? nameMatch[1] : 'Unknown',
-            relationship: '',
-            details: transcript,
-        };
+    try {
+      const parsed = JSON.parse(cleanJson);
+      return {
+        name: parsed.name || "Unknown",
+        relationship: parsed.relationship || "",
+        details: parsed.details || "",
+      };
+    } catch {
+      // If JSON parsing fails, try to extract the name manually
+      const nameMatch = transcript.match(
+        /(?:this is|i'm with|meet|called|named)\s+(\w+)/i,
+      );
+      return {
+        name: nameMatch ? nameMatch[1] : "Unknown",
+        relationship: "",
+        details: transcript,
+      };
     }
+  } catch (error) {
+    console.error("Error extracting person info:", error);
+    // Fallback: try simple name extraction
+    const nameMatch = transcript.match(
+      /(?:this is|i'm with|meet|called|named)\s+(\w+)/i,
+    );
+    return {
+      name: nameMatch ? nameMatch[1] : "Unknown",
+      relationship: "",
+      details: transcript,
+    };
+  }
 }
 
 /**
@@ -437,26 +578,29 @@ Respond with ONLY valid JSON, no markdown, no explanation. Example:
  * @param targetLanguage - Natural language name, e.g. "Filipino/Tagalog", "Cebuano/Bisaya dialect"
  * @returns Translated string, or original text if translation fails
  */
-export async function translateText(text: string, targetLanguage: string): Promise<string> {
-    if (targetLanguage.toLowerCase().startsWith('english')) return text;
+export async function translateText(
+  text: string,
+  targetLanguage: string,
+): Promise<string> {
+  if (targetLanguage.toLowerCase().startsWith("english")) return text;
 
-    try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
-        const prompt = `Translate the following medical information text into ${targetLanguage}. 
+  try {
+    const prompt = `Translate the following medical information text into ${targetLanguage}. 
 Keep it natural and easy to understand, especially for elderly people.
 Return ONLY the translated text with no extra explanation, no quotes, no markdown.
 
 Text to translate:
 ${text}`;
 
-        const result = await model.generateContent(prompt);
-        const translated = result.response.text().trim();
-        return translated || text;
-    } catch (error) {
-        console.error('Translation failed:', error);
-        return text;
+    const translated = (await generateGeminiText(prompt)).trim();
+    return translated || text;
+  } catch (error) {
+    console.error("Translation failed:", error);
+    if (String(error).includes("OFFLINE_MODE")) {
+      return text;
     }
+    return text;
+  }
 }
 
 /**
@@ -468,52 +612,68 @@ ${text}`;
 /**
  * Retries an async function up to maxRetries times with exponential backoff on 429 errors.
  */
-async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delayMs = 5000): Promise<T> {
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        try {
-            return await fn();
-        } catch (err: any) {
-            const is429 = err?.message?.includes('429') || err?.status === 429;
-            if (is429 && attempt < maxRetries) {
-                const wait = delayMs * (attempt + 1); // 5s, 10s, 15s
-                console.warn(`Gemini 429 – retrying in ${wait / 1000}s (attempt ${attempt + 1}/${maxRetries})`);
-                await new Promise(res => setTimeout(res, wait));
-            } else {
-                throw err;
-            }
-        }
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3,
+  delayMs = 5000,
+): Promise<T> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const is429 = err?.message?.includes("429") || err?.status === 429;
+      if (is429 && attempt < maxRetries) {
+        const wait = delayMs * (attempt + 1); // 5s, 10s, 15s
+        console.warn(
+          `Gemini 429 – retrying in ${wait / 1000}s (attempt ${attempt + 1}/${maxRetries})`,
+        );
+        await new Promise((res) => setTimeout(res, wait));
+      } else {
+        throw err;
+      }
     }
-    throw new Error('Max retries exceeded');
+  }
+  throw new Error("Max retries exceeded");
 }
 
 export async function translateBatch(
-    medicines: Array<{ medicineName: string; commonUses: string; warnings: string | string[]; simpleInstructions?: string }>,
-    targetLanguage: string
-): Promise<Array<{ name: string; purpose: string; warnings: string; simpleInstructions?: string }>> {
-    const fallback = medicines.map(m => ({
-        name: m.medicineName,
-        purpose: m.commonUses,
-        warnings: Array.isArray(m.warnings) ? m.warnings.join('. ') : m.warnings,
-        simpleInstructions: m.simpleInstructions,
+  medicines: Array<{
+    medicineName: string;
+    commonUses: string;
+    warnings: string | string[];
+    simpleInstructions?: string;
+  }>,
+  targetLanguage: string,
+): Promise<
+  Array<{
+    name: string;
+    purpose: string;
+    warnings: string;
+    simpleInstructions?: string;
+  }>
+> {
+  const fallback = medicines.map((m) => ({
+    name: m.medicineName,
+    purpose: m.commonUses,
+    warnings: Array.isArray(m.warnings) ? m.warnings.join(". ") : m.warnings,
+    simpleInstructions: m.simpleInstructions,
+  }));
+
+  if (targetLanguage.toLowerCase().startsWith("english")) return fallback;
+
+  try {
+    const payload = medicines.map((m, i) => ({
+      id: i,
+      name: m.medicineName,
+      purpose: m.commonUses,
+      warnings: Array.isArray(m.warnings) ? m.warnings.join(". ") : m.warnings,
+      ...(m.simpleInstructions && { simpleInstructions: m.simpleInstructions }),
     }));
 
-    if (targetLanguage.toLowerCase().startsWith('english')) return fallback;
-
-    try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
-        const payload = medicines.map((m, i) => ({
-            id: i,
-            name: m.medicineName,
-            purpose: m.commonUses,
-            warnings: Array.isArray(m.warnings) ? m.warnings.join('. ') : m.warnings,
-            ...(m.simpleInstructions && { simpleInstructions: m.simpleInstructions }),
-        }));
-
-        // IMPORTANT: The prompt explicitly instructs Gemini to keep JSON keys in English,
-        // only translating the string VALUES. Without this, Gemini translates keys too,
-        // which breaks parsing and silently falls back to English.
-        const prompt = `You are a medical translator. Translate only the STRING VALUES (not the keys) in the JSON array below into ${targetLanguage}.
+    // IMPORTANT: The prompt explicitly instructs Gemini to keep JSON keys in English,
+    // only translating the string VALUES. Without this, Gemini translates keys too,
+    // which breaks parsing and silently falls back to English.
+    const prompt = `You are a medical translator. Translate only the STRING VALUES (not the keys) in the JSON array below into ${targetLanguage}.
 RULES:
 - Keep all JSON keys exactly as-is in English: "id", "name", "purpose", "warnings", "simpleInstructions"
 - The "id" field must remain an integer (do not translate it)
@@ -524,55 +684,65 @@ RULES:
 Input JSON:
 ${JSON.stringify(payload, null, 2)}`;
 
-        const result = await withRetry(() => model.generateContent(prompt));
-        const raw = result.response.text().trim()
-            .replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const raw = (await withRetry(() => generateGeminiText(prompt)))
+      .trim()
+      .replace(/```json\n?/g, "")
+      .replace(/```\n?/g, "")
+      .trim();
 
-        const parsed: Array<{ id: number; name: string; purpose: string; warnings: string; simpleInstructions?: string }> = JSON.parse(raw);
+    const parsed: Array<{
+      id: number;
+      name: string;
+      purpose: string;
+      warnings: string;
+      simpleInstructions?: string;
+    }> = JSON.parse(raw);
 
-        return medicines.map((_, i) => {
-            const found = parsed.find(p => p.id === i);
-            if (found && found.name && found.purpose) {
-                return { 
-                    name: found.name, 
-                    purpose: found.purpose, 
-                    warnings: found.warnings || fallback[i].warnings,
-                    simpleInstructions: found.simpleInstructions || fallback[i].simpleInstructions 
-                };
-            }
-            return fallback[i];
-        });
-    } catch (error) {
-        console.error('Batch translation failed for', targetLanguage, ':', error);
-        return fallback;
-    }
+    return medicines.map((_, i) => {
+      const found = parsed.find((p) => p.id === i);
+      if (found && found.name && found.purpose) {
+        return {
+          name: found.name,
+          purpose: found.purpose,
+          warnings: found.warnings || fallback[i].warnings,
+          simpleInstructions:
+            found.simpleInstructions || fallback[i].simpleInstructions,
+        };
+      }
+      return fallback[i];
+    });
+  } catch (error) {
+    console.error("Batch translation failed for", targetLanguage, ":", error);
+    return fallback;
+  }
 }
 
 // ─── PhilHealth & Senior Discount Info ───────────────────────────────────────
 
 export interface PhilHealthInfo {
-    isPhilHealthCovered: boolean;
-    coverageDetails: string;
-    seniorDiscountEligible: boolean;
-    discountNote: string;
-    estimatedPrice: string;
-    genericAlternative: string;
-    programsAvailable: string[];
+  isPhilHealthCovered: boolean;
+  coverageDetails: string;
+  seniorDiscountEligible: boolean;
+  discountNote: string;
+  estimatedPrice: string;
+  genericAlternative: string;
+  programsAvailable: string[];
 }
 
-export async function getPhilHealthInfo(medicineName: string): Promise<PhilHealthInfo> {
-    const fallback: PhilHealthInfo = {
-        isPhilHealthCovered: false,
-        coverageDetails: 'Unable to determine coverage',
-        seniorDiscountEligible: true,
-        discountNote: '20% discount for senior citizens under RA 9994',
-        estimatedPrice: 'Price varies by pharmacy',
-        genericAlternative: 'Ask your pharmacist for a generic alternative',
-        programsAvailable: ['PCSO Medical Assistance', 'Malasakit Center'],
-    };
-    try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-        const prompt = `You are a Philippine healthcare assistant. For the medicine "${medicineName}", provide:
+export async function getPhilHealthInfo(
+  medicineName: string,
+): Promise<PhilHealthInfo> {
+  const fallback: PhilHealthInfo = {
+    isPhilHealthCovered: false,
+    coverageDetails: "Unable to determine coverage",
+    seniorDiscountEligible: true,
+    discountNote: "20% discount for senior citizens under RA 9994",
+    estimatedPrice: "Price varies by pharmacy",
+    genericAlternative: "Ask your pharmacist for a generic alternative",
+    programsAvailable: ["PCSO Medical Assistance", "Malasakit Center"],
+  };
+  try {
+    const prompt = `You are a Philippine healthcare assistant. For the medicine "${medicineName}", provide:
 1. Is it on the PhilHealth Essential Medicines List or covered by any PhilHealth package?
 2. Is it eligible for the 20% Senior Citizen Discount under RA 9994 in the Philippines?
 3. Estimated retail price in Philippine pharmacies
@@ -581,31 +751,38 @@ export async function getPhilHealthInfo(medicineName: string): Promise<PhilHealt
 
 Respond ONLY with JSON (no markdown, no backticks):
 {"isPhilHealthCovered":boolean,"coverageDetails":"string","seniorDiscountEligible":boolean,"discountNote":"string","estimatedPrice":"string in PHP","genericAlternative":"string","programsAvailable":["string"]}`;
-        const result = await model.generateContent(prompt);
-        const text = result.response.text().trim().replace(/```json|```/g, '').trim();
-        return { ...fallback, ...JSON.parse(text) };
-    } catch (err) {
-        console.error('PhilHealth info error:', err);
-        return fallback;
+    const text = (await generateGeminiText(prompt))
+      .trim()
+      .replace(/```json|```/g, "")
+      .trim();
+    return { ...fallback, ...JSON.parse(text) };
+  } catch (err) {
+    console.error("PhilHealth info error:", err);
+    if (String(err).includes("OFFLINE_MODE")) {
+      return getOfflinePhilHealthInfo(medicineName);
     }
+    return fallback;
+  }
 }
 
-export async function checkDrugInteraction(medicine1: string, medicine2: string): Promise<any> {
-    const fallback = {
-        isSafe: true,
-        interaction: 'Unable to determine interaction at this time',
-        sidesEffects: [],
-        recommendation: 'Please consult with a healthcare professional for personalized advice'
-    };
+export async function checkDrugInteraction(
+  medicine1: string,
+  medicine2: string,
+): Promise<any> {
+  const fallback = {
+    isSafe: true,
+    interaction: "Unable to determine interaction at this time",
+    sidesEffects: [],
+    recommendation:
+      "Please consult with a healthcare professional for personalized advice",
+  };
 
-    try {
-        if (!API_KEY) {
-            console.error('Gemini API key not configured');
-            throw new Error('API key missing');
-        }
+  try {
+    if (!API_KEY && !hasAiProxy()) {
+      throw new Error("OFFLINE_MODE");
+    }
 
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-        const prompt = `You are a clinical pharmacist AI. Check the drug interaction between "${medicine1}" and "${medicine2}".
+    const prompt = `You are a clinical pharmacist AI. Check the drug interaction between "${medicine1}" and "${medicine2}".
 
 Provide a response with:
 1. Is it safe to take both medicines together? (true/false)
@@ -621,25 +798,32 @@ Respond ONLY with valid JSON (no markdown, no backticks):
   "recommendation": "recommendation"
 }`;
 
-        const result = await model.generateContent(prompt);
-        const text = result.response.text().trim();
-        
-        // Remove markdown code blocks if present
-        let jsonText = text;
-        if (jsonText.includes('```')) {
-            jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        }
-        
-        const parsed = JSON.parse(jsonText);
-        
-        return {
-            isSafe: parsed.isSafe ?? fallback.isSafe,
-            interaction: parsed.interaction ?? fallback.interaction,
-            sidesEffects: Array.isArray(parsed.sidesEffects) ? parsed.sidesEffects.filter(Boolean) : fallback.sidesEffects,
-            recommendation: parsed.recommendation ?? fallback.recommendation
-        };
-    } catch (err) {
-        console.error('Drug interaction check error:', err);
-        return fallback;
+    const text = (await generateGeminiText(prompt)).trim();
+
+    // Remove markdown code blocks if present
+    let jsonText = text;
+    if (jsonText.includes("```")) {
+      jsonText = jsonText
+        .replace(/```json\n?/g, "")
+        .replace(/```\n?/g, "")
+        .trim();
     }
+
+    const parsed = JSON.parse(jsonText);
+
+    return {
+      isSafe: parsed.isSafe ?? fallback.isSafe,
+      interaction: parsed.interaction ?? fallback.interaction,
+      sidesEffects: Array.isArray(parsed.sidesEffects)
+        ? parsed.sidesEffects.filter(Boolean)
+        : fallback.sidesEffects,
+      recommendation: parsed.recommendation ?? fallback.recommendation,
+    };
+  } catch (err) {
+    console.error("Drug interaction check error:", err);
+    if (String(err).includes("OFFLINE_MODE")) {
+      return getOfflineDrugInteraction(medicine1, medicine2);
+    }
+    return fallback;
+  }
 }

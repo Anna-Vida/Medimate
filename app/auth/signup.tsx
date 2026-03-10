@@ -4,20 +4,21 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-  Alert,
-  KeyboardAvoidingView,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    KeyboardAvoidingView,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { Colors } from "../../constants/Colors";
 import { signUpFlow } from "../../services/authFacade";
+import { syncIdentityToProfile } from "../../services/userProfile";
 import { moderateScale, scale, verticalScale } from "../../utils/responsive";
 
 export default function SignUpScreen() {
@@ -109,30 +110,15 @@ export default function SignUpScreen() {
 
       await signUpFlow(trimmedEmail, trimmedPin, trimmedName);
 
-      // Split name into first/last
-      const nameParts = trimmedName.split(" ");
-      const firstName = nameParts[0] || "";
-      const lastName = nameParts.slice(1).join(" ") || "";
-
-      // Read any existing profile and merge signup data into it
-      const existingRaw = await AsyncStorage.getItem("user_profile");
-      const existingProfile = existingRaw ? JSON.parse(existingRaw) : {};
-      const updatedProfile = {
-        ...existingProfile,
-        firstName,
-        lastName,
-        contactNumber,
-        email: trimmedEmail,
-      };
-      await AsyncStorage.setItem(
-        "user_profile",
-        JSON.stringify(updatedProfile),
+      await syncIdentityToProfile(
+        {
+          fullName: trimmedName,
+          email: trimmedEmail,
+          contactNumber,
+        },
+        { forceName: true },
       );
 
-      // Also store individual keys for other consumers
-      await AsyncStorage.setItem("user_name", trimmedName);
-      await AsyncStorage.setItem("user_phone", contactNumber);
-      await AsyncStorage.setItem("user_email", trimmedEmail);
       await AsyncStorage.setItem("onboarding_done", "1");
 
       // Show success message before navigating

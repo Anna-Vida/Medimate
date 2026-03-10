@@ -4,18 +4,19 @@ import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  Linking,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Linking,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
-import { moderateScale, scale, verticalScale } from "../utils/responsive";
+import { SafeAreaView } from "react-native-safe-area-context";
+import AppHeader from "../components/app-header";
 import { Colors } from "../constants/Colors";
+import { moderateScale, scale, verticalScale } from "../utils/responsive";
 
 interface Pharmacy {
   name: string;
@@ -24,6 +25,8 @@ interface Pharmacy {
   description: string;
   hotline: string;
 }
+
+type CarePriority = "nearest" | "budget";
 
 const PHARMACIES: Pharmacy[] = [
   {
@@ -66,12 +69,13 @@ const PHARMACIES: Pharmacy[] = [
 export default function PharmacyFinderScreen() {
   const router = useRouter();
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(
-    null
+    null,
   );
   const [address, setAddress] = useState<string>("");
   const [locationStatus, setLocationStatus] = useState<
     "loading" | "ready" | "denied" | "idle"
   >("idle");
+  const [priority, setPriority] = useState<CarePriority>("nearest");
 
   useEffect(() => {
     getLocation();
@@ -103,7 +107,7 @@ export default function PharmacyFinderScreen() {
           setAddress(
             `${street ? street + ", " : ""}${
               district ? district + ", " : ""
-            }${city}`
+            }${city}`,
           );
         } else {
           setAddress(`${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`);
@@ -122,13 +126,13 @@ export default function PharmacyFinderScreen() {
       Linking.openURL(
         `https://www.google.com/maps/search/${encodeURIComponent(query)}/@${
           location.lat
-        },${location.lng},15z`
+        },${location.lng},15z`,
       );
     } else {
       Linking.openURL(
         `https://www.google.com/maps/search/${encodeURIComponent(
-          query + " Philippines"
-        )}`
+          query + " Philippines",
+        )}`,
       );
     }
   };
@@ -139,24 +143,63 @@ export default function PharmacyFinderScreen() {
     Linking.openURL(`tel:${phone.replace(/\s/g, "")}`);
   };
 
+  const recommendedPharmacy = React.useMemo(() => {
+    if (priority === "budget") {
+      return (
+        PHARMACIES.find(
+          (p) => p.name.includes("Generika") || p.name.includes("Generics"),
+        ) || PHARMACIES[0]
+      );
+    }
+    return PHARMACIES[0];
+  }, [priority]);
+
   return (
-    <SafeAreaView style={styles.root}>
+    <SafeAreaView style={styles.root} edges={["top"]}>
       <StatusBar barStyle="dark-content" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7}>
-            <View style={styles.headerBtn}>
-              <Ionicons name="arrow-back" size={24} color="#334155" />
-            </View>
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.headerTitle}>Find a Pharmacy</Text>
-            <Text style={styles.headerSub}>
-              Nearest pharmacies in the Philippines
+      <AppHeader
+        title="Find a Pharmacy"
+        subtitle="Nearest pharmacies in the Philippines"
+        onBack={() => router.back()}
+      />
+
+      <View style={styles.headerTools}>
+        <View style={styles.priorityRow}>
+          <TouchableOpacity
+            style={[
+              styles.priorityChip,
+              priority === "nearest" && styles.priorityChipActive,
+            ]}
+            onPress={() => setPriority("nearest")}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.priorityText,
+                priority === "nearest" && styles.priorityTextActive,
+              ]}
+            >
+              Nearest
             </Text>
-          </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.priorityChip,
+              priority === "budget" && styles.priorityChipActive,
+            ]}
+            onPress={() => setPriority("budget")}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.priorityText,
+                priority === "budget" && styles.priorityTextActive,
+              ]}
+            >
+              Budget Saver
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Location Card */}
@@ -169,10 +212,10 @@ export default function PharmacyFinderScreen() {
               {locationStatus === "ready"
                 ? "Location Found ✓"
                 : locationStatus === "loading"
-                ? "Getting location..."
-                : locationStatus === "denied"
-                ? "Location access denied"
-                : "Location not found"}
+                  ? "Getting location..."
+                  : locationStatus === "denied"
+                    ? "Location access denied"
+                    : "Location not found"}
             </Text>
             <Text style={styles.locationSub}>
               {locationStatus === "ready"
@@ -201,15 +244,53 @@ export default function PharmacyFinderScreen() {
             activeOpacity={0.85}
           >
             <LinearGradient
-              colors={[Colors.primary, Colors.secondary]}
+              colors={[Colors.primary, Colors.secondary || Colors.primaryDark]}
               style={styles.nearbyBtnInner}
             >
-              <Ionicons name="navigate" size={22} color="#FFF" />
-              <Text style={styles.nearbyBtnText}>
-                Find Nearest Pharmacy Now
-              </Text>
+              <View style={styles.nearbyIconWrap}>
+                <Ionicons name="navigate" size={18} color="#FFF" />
+              </View>
+              <View style={styles.nearbyTextWrap}>
+                <Text style={styles.nearbyBtnText}>Find Nearest Pharmacy</Text>
+                <Text style={styles.nearbyBtnSub}>
+                  Open Google Maps nearby search
+                </Text>
+              </View>
+              <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
             </LinearGradient>
           </TouchableOpacity>
+        </Animated.View>
+
+        {/* Unique feature: Smart match */}
+        <Animated.View entering={FadeInUp.duration(400).delay(80)}>
+          <View style={styles.smartCard}>
+            <View style={styles.smartTop}>
+              <Ionicons name="sparkles" size={18} color="#0EA5E9" />
+              <Text style={styles.smartTitle}>Smart Pharmacy Match</Text>
+            </View>
+            <Text style={styles.smartSub}>
+              Based on your selected priority, best quick option is:
+            </Text>
+            <Text style={styles.smartName}>{recommendedPharmacy.name}</Text>
+            <View style={styles.smartActions}>
+              <TouchableOpacity
+                style={styles.smartBtnPrimary}
+                onPress={() => findNearby(recommendedPharmacy.name)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="navigate" size={16} color="#FFF" />
+                <Text style={styles.smartBtnPrimaryText}>Route</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.smartBtnGhost}
+                onPress={() => handleCall(recommendedPharmacy.hotline)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="call" size={16} color={Colors.primary} />
+                <Text style={styles.smartBtnGhostText}>Call</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </Animated.View>
 
         {/* DOH Hotline */}
@@ -278,11 +359,18 @@ export default function PharmacyFinderScreen() {
                   />
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: Colors.primary + "15" }]}
+                  style={[
+                    styles.actionBtn,
+                    { backgroundColor: Colors.primary + "15" },
+                  ]}
                   onPress={() => handleCall(pharmacy.hotline)}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="call-outline" size={16} color={Colors.primary} />
+                  <Ionicons
+                    name="call-outline"
+                    size={16}
+                    color={Colors.primary}
+                  />
                 </TouchableOpacity>
               </View>
             </View>
@@ -293,7 +381,11 @@ export default function PharmacyFinderScreen() {
         <Animated.View entering={FadeInUp.duration(400).delay(700)}>
           <View style={styles.noteCard}>
             <View style={styles.noteIconWrap}>
-              <Ionicons name="information-circle" size={24} color={Colors.primary} />
+              <Ionicons
+                name="information-circle"
+                size={24}
+                color={Colors.primary}
+              />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.noteTitle}>Senior Citizen Discount</Text>
@@ -317,36 +409,100 @@ export default function PharmacyFinderScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.background },
-  header: {
-    paddingTop: verticalScale(48),
-    paddingBottom: verticalScale(20),
+  headerTools: {
+    paddingTop: verticalScale(14),
+    paddingBottom: verticalScale(14),
     paddingHorizontal: scale(20),
     backgroundColor: Colors.background,
   },
-  headerRow: {
+  priorityRow: {
+    flexDirection: "row",
+    gap: scale(8),
+    marginBottom: verticalScale(10),
+  },
+  priorityChip: {
+    paddingHorizontal: scale(14),
+    paddingVertical: verticalScale(8),
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  priorityChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  priorityText: {
+    fontSize: moderateScale(12),
+    color: Colors.textSecondary,
+    fontWeight: "700",
+  },
+  priorityTextActive: {
+    color: "#FFF",
+  },
+  smartCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: scale(14),
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    marginBottom: verticalScale(12),
+  },
+  smartTop: {
     flexDirection: "row",
     alignItems: "center",
-    gap: scale(12),
-    marginBottom: verticalScale(16),
+    gap: 6,
   },
-  headerBtn: {
-    width: scale(44),
-    height: scale(44),
-    borderRadius: 14,
-    backgroundColor: Colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    fontSize: moderateScale(22),
-    fontWeight: "700",
-    color: "#1E293B",
-  },
-  headerSub: {
+  smartTitle: {
     fontSize: moderateScale(14),
-    color: "#64748B",
-    fontWeight: "500",
-    marginTop: 2,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  smartSub: {
+    marginTop: 6,
+    color: Colors.textSecondary,
+    fontSize: moderateScale(12),
+  },
+  smartName: {
+    marginTop: 4,
+    fontSize: moderateScale(16),
+    fontWeight: "800",
+    color: Colors.primary,
+  },
+  smartActions: {
+    flexDirection: "row",
+    gap: scale(8),
+    marginTop: 10,
+  },
+  smartBtnPrimary: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(8),
+    borderRadius: 10,
+  },
+  smartBtnPrimaryText: {
+    color: "#FFF",
+    fontWeight: "700",
+    fontSize: moderateScale(12),
+  },
+  smartBtnGhost: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: scale(12),
+    paddingVertical: verticalScale(8),
+    borderRadius: 10,
+  },
+  smartBtnGhostText: {
+    color: Colors.primary,
+    fontWeight: "700",
+    fontSize: moderateScale(12),
   },
   locationCard: {
     flexDirection: "row",
@@ -357,6 +513,11 @@ const styles = StyleSheet.create({
     padding: scale(14),
     borderWidth: 1,
     borderColor: Colors.primaryLight + "40",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 7,
+    elevation: 1,
   },
   locationIcon: {
     width: scale(40),
@@ -386,25 +547,50 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   bodyContent: {
     paddingHorizontal: scale(20),
-    paddingVertical: verticalScale(8),
+    paddingTop: verticalScale(10),
+    paddingBottom: verticalScale(8),
   },
 
   nearbyBtn: {
     marginBottom: verticalScale(12),
-    borderRadius: 18,
+    borderRadius: 16,
     overflow: "hidden",
+    shadowColor: Colors.primaryDark,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    elevation: 4,
   },
   nearbyBtnInner: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-between",
     gap: scale(10),
-    paddingVertical: verticalScale(18),
+    paddingVertical: verticalScale(14),
+    paddingHorizontal: scale(14),
+  },
+  nearbyIconWrap: {
+    width: scale(34),
+    height: scale(34),
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  nearbyTextWrap: {
+    flex: 1,
+    marginLeft: 2,
   },
   nearbyBtnText: {
     color: "#FFF",
-    fontWeight: "700",
-    fontSize: moderateScale(16),
+    fontWeight: "800",
+    fontSize: moderateScale(15),
+  },
+  nearbyBtnSub: {
+    color: "rgba(255,255,255,0.86)",
+    fontWeight: "500",
+    fontSize: moderateScale(11),
+    marginTop: 2,
   },
 
   dohCard: {

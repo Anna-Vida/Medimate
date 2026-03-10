@@ -2,33 +2,32 @@ import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import NetInfo from "@react-native-community/netinfo";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Notifications from "expo-notifications";
-import { useRouter } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Image,
-  Modal,
-  Platform,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  Vibration,
-  View,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    Image,
+    Modal,
+    Platform,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    Vibration,
+    View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "../constants/Colors";
 import {
-  analyzeInteractions,
-  analyzeMedicineImage,
-  InteractionReport,
-  MedicineAnalysis,
-  translateBatch,
-  translateText,
+    analyzeInteractions,
+    analyzeMedicineImage,
+    InteractionReport,
+    MedicineAnalysis,
+    translateBatch,
+    translateText,
 } from "../services/gemini";
 import { Language, LANGUAGES } from "../services/languages";
 import { saveMedication } from "../services/medicationStorage";
@@ -126,7 +125,11 @@ const RecentScansModal = ({
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>Recent Scans</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeIconBtn}>
-              <Ionicons name="close-circle" size={32} color={Colors.primaryDark} />
+              <Ionicons
+                name="close-circle"
+                size={32}
+                color={Colors.primaryDark}
+              />
             </TouchableOpacity>
           </View>
           {loading ? (
@@ -265,7 +268,11 @@ const CustomTimePicker = ({
                   onPress={() => setHour((h) => (h === 12 ? 1 : h + 1))}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="chevron-up" size={36} color={Colors.primaryDark} />
+                  <Ionicons
+                    name="chevron-up"
+                    size={36}
+                    color={Colors.primaryDark}
+                  />
                 </TouchableOpacity>
                 <Text style={styles.timeDigit}>
                   {hour.toString().padStart(2, "0")}
@@ -275,7 +282,11 @@ const CustomTimePicker = ({
                   onPress={() => setHour((h) => (h === 1 ? 12 : h - 1))}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="chevron-down" size={36} color={Colors.primaryDark} />
+                  <Ionicons
+                    name="chevron-down"
+                    size={36}
+                    color={Colors.primaryDark}
+                  />
                 </TouchableOpacity>
               </View>
               <Text style={styles.timeSeparator}>:</Text>
@@ -286,7 +297,11 @@ const CustomTimePicker = ({
                   onPress={() => setMinute((m) => (m >= 55 ? 0 : m + 5))}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="chevron-up" size={36} color={Colors.primaryDark} />
+                  <Ionicons
+                    name="chevron-up"
+                    size={36}
+                    color={Colors.primaryDark}
+                  />
                 </TouchableOpacity>
                 <Text style={styles.timeDigit}>
                   {minute.toString().padStart(2, "0")}
@@ -296,7 +311,11 @@ const CustomTimePicker = ({
                   onPress={() => setMinute((m) => (m < 5 ? 55 : m - 5))}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="chevron-down" size={36} color={Colors.primaryDark} />
+                  <Ionicons
+                    name="chevron-down"
+                    size={36}
+                    color={Colors.primaryDark}
+                  />
                 </TouchableOpacity>
               </View>
               {/* AM/PM */}
@@ -490,7 +509,9 @@ const LanguagePicker = ({
                   paddingVertical: 13,
                   paddingHorizontal: 16,
                   borderRadius: 20,
-                  backgroundColor: isSelected ? Colors.primaryBg : "transparent",
+                  backgroundColor: isSelected
+                    ? Colors.primaryBg
+                    : "transparent",
                   borderWidth: isSelected ? 1 : 0,
                   borderColor: "#BFDBFE",
                 }}
@@ -528,7 +549,11 @@ const LanguagePicker = ({
                     </View>
                   )}
                 {isSelected && (
-                  <Ionicons name="checkmark-circle" size={20} color={Colors.primaryDark} />
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={20}
+                    color={Colors.primaryDark}
+                  />
                 )}
               </TouchableOpacity>
             );
@@ -554,7 +579,6 @@ const LanguagePicker = ({
   </Modal>
 );
 export default function Scanner() {
-  const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
   const [photo, setPhoto] = useState<string | null>(null);
   const [results, setResults] = useState<MedicineAnalysis[]>([]);
@@ -628,7 +652,7 @@ export default function Scanner() {
       setIsTranslatingAll(true);
       const translations = await translateBatch(
         results,
-        selectedLang.geminiName
+        selectedLang.geminiName,
       );
       if (!cancelled) {
         const map: Record<
@@ -689,7 +713,7 @@ export default function Scanner() {
             }, 5000);
           }
         }
-      }
+      },
     );
     return () => subscription.remove();
   }, []);
@@ -737,14 +761,14 @@ export default function Scanner() {
     hour: number,
     minute: number,
     isAuto: boolean = false,
-    toneId: string = "standard"
+    toneId: string = "standard",
   ) => {
     try {
       const hasPermission = await requestNotificationPermissions();
       if (!hasPermission) {
         Alert.alert(
           "Permission Required",
-          "Notifications are needed for reminders."
+          "Notifications are needed for reminders.",
         );
         return;
       }
@@ -754,7 +778,7 @@ export default function Scanner() {
       if (scheduledTime <= now)
         scheduledTime.setDate(scheduledTime.getDate() + 1);
       const secondsUntil = Math.floor(
-        (scheduledTime.getTime() - now.getTime()) / 1000
+        (scheduledTime.getTime() - now.getTime()) / 1000,
       );
       const tone = ALARM_TONES.find((t) => t.id === toneId) || ALARM_TONES[1];
       await Notifications.scheduleNotificationAsync({
@@ -788,7 +812,7 @@ export default function Scanner() {
         setShowSuccessModal(true);
         setTimeout(() => setShowSuccessModal(false), 3000);
       }, 300);
-    } catch (err) {
+    } catch {
       if (!isAuto) Alert.alert("Error", "Could not set reminder.");
     }
   };
@@ -799,7 +823,7 @@ export default function Scanner() {
     if (!netState.isConnected) {
       Alert.alert(
         "No Internet Connection",
-        "You need an internet connection to identify new medicines. Please check your settings."
+        "You need an internet connection to identify new medicines. Please check your settings.",
       );
       return;
     }
@@ -832,7 +856,7 @@ export default function Scanner() {
         if (!isNaN(h) && !isNaN(m)) {
           setTimeout(
             () => scheduleReminder(analysis[0].medicineName, h, m, true),
-            800
+            800,
           );
         }
       }
@@ -921,7 +945,11 @@ export default function Scanner() {
                     <Text style={styles.langChipText}>
                       {selectedLang.label.split(" ")[0]}
                     </Text>
-                    <Ionicons name="chevron-down" size={12} color={Colors.primary} />
+                    <Ionicons
+                      name="chevron-down"
+                      size={12}
+                      color={Colors.primary}
+                    />
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={retakePhoto}
@@ -1031,7 +1059,11 @@ export default function Scanner() {
                           activeOpacity={0.7}
                         >
                           <View style={styles.medCardIconWrap}>
-                            <Ionicons name="medkit" size={18} color={Colors.primary} />
+                            <Ionicons
+                              name="medkit"
+                              size={18}
+                              color={Colors.primary}
+                            />
                           </View>
                           <View style={{ flex: 1, marginRight: 8 }}>
                             <Text style={styles.medCardTitle} numberOfLines={2}>
@@ -1078,14 +1110,17 @@ export default function Scanner() {
                               onPress={() =>
                                 handleSpeak(
                                   `${displayName}. ${displayPurpose}`,
-                                  index
+                                  index,
                                 )
                               }
                               style={styles.speakBtn}
                               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                             >
                               {speakingIndex === index ? (
-                                <ActivityIndicator size={18} color={Colors.primary} />
+                                <ActivityIndicator
+                                  size={18}
+                                  color={Colors.primary}
+                                />
                               ) : (
                                 <Ionicons
                                   name="volume-medium-outline"
@@ -1210,42 +1245,7 @@ export default function Scanner() {
                                 </Text>
                               </View>
                             )}
-                            {/* Patient ID Component (if available) */}
-                            {(med.patientName ||
-                              med.patientAge ||
-                              med.patientSex) && (
-                                <View style={styles.patientIdCard}>
-                                  <View style={styles.patientAvatarContainer}>
-                                    <Ionicons
-                                      name="person"
-                                      size={20}
-                                      color="#FFF"
-                                    />
-                                  </View>
-                                  <View style={styles.patientDetails}>
-                                    <Text style={styles.patientNameLarge}>
-                                      {med.patientName || "Unknown Patient"}
-                                    </Text>
-                                    <View style={styles.patientSubDetails}>
-                                      <Text style={styles.patientMeta}>
-                                        {med.patientAge
-                                          ? `${med.patientAge} yrs`
-                                          : "—"}
-                                      </Text>
-                                      <View style={styles.metaDivider} />
-                                      <Text style={styles.patientMeta}>
-                                        {med.patientSex || "—"}
-                                      </Text>
-                                    </View>
-                                  </View>
-                                </View>
-                              )}
-                          </View>
-                        )}
-                        {/* PRESCRIPTION DETAILS */}
-                        {(med.prescribedBy ||
-                          med.hospital ||
-                          med.signatureVerified) && (
+                            {/* Prescription identity card */}
                             <View style={styles.rxCard}>
                               <View style={styles.rxCardHeader}>
                                 <View style={styles.rxIconWrap}>
@@ -1256,7 +1256,7 @@ export default function Scanner() {
                                   />
                                 </View>
                                 <Text style={styles.rxCardTitle}>
-                                  Prescription Details
+                                  Prescription Identity
                                 </Text>
                                 {med.signatureVerified && (
                                   <View style={styles.rxSignedBadge}>
@@ -1271,35 +1271,61 @@ export default function Scanner() {
                                   </View>
                                 )}
                               </View>
+                              <Text style={styles.rxSubtext}>
+                                Captured details from prescription scan
+                              </Text>
+
                               <View style={styles.rxDivider} />
-                              {med.prescribedBy && (
-                                <View style={styles.rxRow}>
-                                  <Text style={styles.rxLabel}>Doctor</Text>
-                                  <Text style={styles.rxValue}>
-                                    {med.prescribedBy}
-                                  </Text>
-                                </View>
-                              )}
-                              {med.hospital && (
+
+                              <View style={styles.rxRow}>
+                                <Text style={styles.rxLabel}>Patient Name</Text>
+                                <Text style={styles.rxValue}>
+                                  {med.patientName || "Not detected"}
+                                </Text>
+                              </View>
+
+                              {(med.patientAge || med.patientSex) && (
                                 <View style={styles.rxRow}>
                                   <Text style={styles.rxLabel}>
-                                    Clinic / Hospital
+                                    Patient Info
                                   </Text>
                                   <Text style={styles.rxValue}>
-                                    {med.hospital}
+                                    {med.patientAge
+                                      ? `${med.patientAge} yrs`
+                                      : "--"}
+                                    {med.patientSex
+                                      ? `, ${med.patientSex}`
+                                      : ""}
                                   </Text>
                                 </View>
                               )}
-                              {med.licenseNumber && (
-                                <View style={styles.rxRow}>
-                                  <Text style={styles.rxLabel}>License No.</Text>
-                                  <Text style={styles.rxValue}>
-                                    {med.licenseNumber}
-                                  </Text>
-                                </View>
-                              )}
+
+                              <View style={styles.rxRow}>
+                                <Text style={styles.rxLabel}>Doctor</Text>
+                                <Text style={styles.rxValue}>
+                                  {med.prescribedBy || "Not detected"}
+                                </Text>
+                              </View>
+
+                              <View style={styles.rxRow}>
+                                <Text style={styles.rxLabel}>
+                                  Clinic / Hospital
+                                </Text>
+                                <Text style={styles.rxValue}>
+                                  {med.hospital || "Not detected"}
+                                </Text>
+                              </View>
+
+                              <View style={[styles.rxRow, styles.rxRowLast]}>
+                                <Text style={styles.rxLabel}>License No.</Text>
+                                <Text style={styles.rxValue}>
+                                  {med.licenseNumber || "Not detected"}
+                                </Text>
+                              </View>
                             </View>
-                          )}
+                          </View>
+                        )}
+
                         {/* WARNINGS */}
                         {displayWarnings && displayWarnings.length > 0 && (
                           <View style={styles.warningCardClean}>
@@ -1317,10 +1343,11 @@ export default function Scanner() {
                               <TouchableOpacity
                                 onPress={() =>
                                   handleSpeak(
-                                    `Warning. ${Array.isArray(displayWarnings)
-                                      ? displayWarnings.join(". ")
-                                      : displayWarnings
-                                    }`
+                                    `Warning. ${
+                                      Array.isArray(displayWarnings)
+                                        ? displayWarnings.join(". ")
+                                        : displayWarnings
+                                    }`,
                                   )
                                 }
                                 style={styles.ttsInline}
@@ -1348,9 +1375,25 @@ export default function Scanner() {
                         {/* FOOD INTERACTIONS */}
                         {med.foodWarnings && med.foodWarnings.length > 0 && (
                           <View style={styles.foodSectionClean}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                              <Ionicons name="restaurant" size={16} color="#B45309" />
-                              <Text style={[styles.sectionLabel, { color: '#B45309', marginBottom: 0 }]}>
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 8,
+                                marginBottom: 10,
+                              }}
+                            >
+                              <Ionicons
+                                name="restaurant"
+                                size={16}
+                                color="#B45309"
+                              />
+                              <Text
+                                style={[
+                                  styles.sectionLabel,
+                                  { color: "#B45309", marginBottom: 0 },
+                                ]}
+                              >
                                 FOOD INTERACTIONS
                               </Text>
                             </View>
@@ -1520,13 +1563,15 @@ export default function Scanner() {
                   <Ionicons
                     name="document-text"
                     size={16}
-                    color={scanMode === "prescription" ? Colors.primary : "#FFF"}
+                    color={
+                      scanMode === "prescription" ? Colors.primary : "#FFF"
+                    }
                   />
                   <Text
                     style={[
                       styles.modeToggleText,
                       scanMode === "prescription" &&
-                      styles.modeToggleTextActive,
+                        styles.modeToggleTextActive,
                     ]}
                   >
                     Prescription
@@ -1586,7 +1631,7 @@ export default function Scanner() {
             h,
             m,
             false,
-            tone
+            tone,
           )
         }
       />
@@ -2595,10 +2640,17 @@ const styles = StyleSheet.create({
   verificationTitle: {},
   // Prescription / Rx Card (clean)
   rxCard: {
-    backgroundColor: "#F0FDF4",
-    borderRadius: 20,
-    padding: scale(16),
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: scale(14),
     marginTop: verticalScale(12),
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   rxCardHeader: {
     flexDirection: "row",
@@ -2606,56 +2658,72 @@ const styles = StyleSheet.create({
     gap: scale(8),
   },
   rxIconWrap: {
-    width: scale(26),
-    height: scale(26),
-    borderRadius: scale(13),
-    backgroundColor: "#DCFCE7",
+    width: scale(28),
+    height: scale(28),
+    borderRadius: scale(14),
+    backgroundColor: Colors.primaryBg,
     alignItems: "center",
     justifyContent: "center",
   },
   rxCardTitle: {
-    fontSize: moderateScale(14),
-    fontWeight: "700",
-    color: "#15803D",
+    fontSize: moderateScale(15),
+    fontWeight: "800",
+    color: Colors.textPrimary,
     flex: 1,
+  },
+  rxSubtext: {
+    marginTop: 6,
+    fontSize: moderateScale(12),
+    color: Colors.textSecondary,
+    fontWeight: "500",
   },
   rxSignedBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#DCFCE7",
+    backgroundColor: Colors.successBg,
+    borderWidth: 1,
+    borderColor: Colors.successBorder,
     paddingHorizontal: scale(8),
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 20,
   },
   rxSignedText: {
-    fontSize: moderateScale(14),
+    fontSize: moderateScale(11),
     fontWeight: "700",
-    color: "#15803D",
+    color: Colors.success,
   },
   rxDivider: {
     height: 1,
-    backgroundColor: "#BBF7D0",
-    marginVertical: verticalScale(10),
+    backgroundColor: Colors.border,
+    marginVertical: verticalScale(12),
   },
   rxRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    paddingVertical: verticalScale(4),
+    alignItems: "center",
+    gap: scale(8),
+    paddingVertical: verticalScale(9),
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEF2F7",
+  },
+  rxRowLast: {
+    borderBottomWidth: 0,
+    paddingBottom: verticalScale(2),
   },
   rxLabel: {
-    fontSize: moderateScale(14),
-    fontWeight: "600",
-    color: "#6B7280",
-    flex: 1,
+    fontSize: moderateScale(12),
+    fontWeight: "700",
+    color: Colors.textSecondary,
+    minWidth: scale(104),
   },
   rxValue: {
     fontSize: moderateScale(14),
-    fontWeight: "600",
-    color: "#1E293B",
-    flex: 2,
+    fontWeight: "700",
+    color: Colors.textPrimary,
+    flex: 1,
     textAlign: "right",
+    lineHeight: 19,
   },
   // Affordability
   affordabilitySection: {
