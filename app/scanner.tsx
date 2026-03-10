@@ -31,6 +31,10 @@ import {
 } from "../services/gemini";
 import { Language, LANGUAGES } from "../services/languages";
 import { saveMedication } from "../services/medicationStorage";
+import {
+    getGeneratedOfflineMedicineCount,
+    getOfflineMedicineCount,
+} from "../services/offlineMedicineData";
 import { getRecentScans, SavedScan, saveScan } from "../services/storage";
 import { moderateScale, scale, verticalScale } from "../utils/responsive";
 // Configure notification handler
@@ -579,6 +583,8 @@ const LanguagePicker = ({
   </Modal>
 );
 export default function Scanner() {
+  const offlineCount = getOfflineMedicineCount();
+  const generatedOfflineCount = getGeneratedOfflineMedicineCount();
   const [permission, requestPermission] = useCameraPermissions();
   const [photo, setPhoto] = useState<string | null>(null);
   const [results, setResults] = useState<MedicineAnalysis[]>([]);
@@ -936,6 +942,12 @@ export default function Scanner() {
                     </Text>
                     <Text style={styles.sheetTopSub}>
                       Tap a card to view details
+                    </Text>
+                    <Text style={styles.sheetTopMeta}>
+                      Offline DB: {offlineCount.toLocaleString()} records
+                      {generatedOfflineCount > 0
+                        ? ` (${generatedOfflineCount.toLocaleString()} from Kaggle)`
+                        : " (using built-in records)"}
                     </Text>
                   </View>
                   <TouchableOpacity
@@ -2201,6 +2213,12 @@ const styles = StyleSheet.create({
     color: "#94A3B8",
     marginTop: 2,
     fontWeight: "500",
+  },
+  sheetTopMeta: {
+    fontSize: moderateScale(11),
+    color: Colors.textSecondary,
+    marginTop: 3,
+    fontWeight: "600",
   },
   sheetCloseBtn: {
     width: scale(36),

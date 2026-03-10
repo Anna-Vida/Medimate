@@ -1,5 +1,5 @@
 import {
-    OFFLINE_MEDICINES,
+    ALL_OFFLINE_MEDICINES,
     OfflineMedicineRecord,
 } from "./offlineMedicineData";
 
@@ -13,7 +13,7 @@ export function findOfflineMedicineByName(
   const q = norm(medicineName);
   if (!q) return null;
 
-  for (const med of OFFLINE_MEDICINES) {
+  for (const med of ALL_OFFLINE_MEDICINES) {
     const targets = [med.name, med.genericName, ...med.aliases].map(norm);
     if (targets.some((t) => t.includes(q) || q.includes(t))) {
       return med;

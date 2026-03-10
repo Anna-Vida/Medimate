@@ -4,6 +4,7 @@ import { Platform } from "react-native";
 import { callAiProxy, hasAiProxy } from "./aiProxy";
 import { isInternetAvailable } from "./network";
 import {
+    findOfflineMedicineByName,
     getOfflineDrugInteraction,
     getOfflinePhilHealthInfo,
 } from "./offlineFallback";
@@ -388,18 +389,54 @@ Do NOT use Markdown code blocks. Just return the raw JSON ARRAY string.`;
   } catch (error: any) {
     console.error("Error analyzing medicine image:", error);
     if (String(error).includes("OFFLINE_MODE")) {
+      // Best-effort offline match using image filename as hint (e.g. biogesic.jpg).
+      const fileName = decodeURIComponent(imageUri.split("/").pop() || "")
+        .replace(/\.[a-z0-9]+$/i, "")
+        .replace(/[_-]+/g, " ")
+        .trim();
+      const localMatch = fileName ? findOfflineMedicineByName(fileName) : null;
+
+      if (localMatch) {
+        return [
+          {
+            medicineName: localMatch.name,
+            activeIngredients: localMatch.genericName,
+            commonUses: localMatch.commonUses,
+            dosage: "Check label / prescription",
+            warnings: localMatch.warnings,
+            sideEffects: localMatch.sideEffects.join(", "),
+            foodWarnings: [],
+            simpleInstructions:
+              "Offline match found from local dataset. Confirm dose with your prescription label.",
+            affordability: {
+              genericAlternative: localMatch.genericName,
+              estimatedSavings: localMatch.estimatedPrice,
+              seniorDiscountEligible: true,
+              philHealthCoverage: localMatch.philHealthCovered
+                ? "May be covered under selected PhilHealth packages"
+                : "No confirmed offline coverage data",
+              governmentPrograms: [
+                "PCSO Medical Assistance",
+                "Malasakit Center",
+                "DSWD AICS",
+              ],
+            },
+          },
+        ];
+      }
+
       return [
         {
           medicineName: "Offline Scan Mode",
           activeIngredients: "Not available offline",
           commonUses:
-            "Image AI analysis requires internet. Use saved records or search medicine name in chatbot for local guidance.",
+            "Image AI analysis requires internet. No matching medicine was found in the local offline dataset.",
           dosage: "Unknown",
           warnings:
             "Offline scan cannot verify medicine identity. Confirm with a pharmacist before taking medication.",
           foodWarnings: [],
           simpleInstructions:
-            "Reconnect to internet for accurate medicine identification.",
+            "Try retaking photo with medicine name visible, or type the medicine name in CareBot for offline guidance.",
         },
       ];
     }
