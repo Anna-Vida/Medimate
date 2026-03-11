@@ -1,0 +1,33 @@
+name: EAS Android Preview APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - scanner-fixes
+
+jobs:
+  build-android-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - uses: expo/expo-github-action@v10
+        with:
+          eas: true
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      - run: npx eas-cli build -p android --profile preview --non-interactive --wait
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      - run: npx eas-cli build:download --platform android --profile preview --non-interactive --path app-preview.apk
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: medimate-preview-apk
+          path: app-preview.apk
