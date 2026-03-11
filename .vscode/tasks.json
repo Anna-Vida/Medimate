@@ -1,0 +1,11 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build release APK arm64",
+			"type": "shell",
+			"command": "cd android; .\\gradlew.bat --stop; .\\gradlew.bat app:assembleRelease -x lint -x test -PreactNativeArchitectures=arm64-v8a --configure-on-demand --build-cache",
+			"isBackground": false
+		}
+	]
+}

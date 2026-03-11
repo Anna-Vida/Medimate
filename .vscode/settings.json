@@ -1,0 +1,21 @@
+{
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit",
+    "source.organizeImports": "explicit",
+    "source.sortMembers": "explicit"
+  },
+  "json.schemas": [
+    {
+      "fileMatch": [
+        "/app.json"
+      ],
+      "url": "./.vscode/schemas/expo-xdl.json"
+    },
+    {
+      "fileMatch": [
+        "/package.json"
+      ],
+      "url": "./.vscode/schemas/package-schema.json"
+    }
+  ]
+}
