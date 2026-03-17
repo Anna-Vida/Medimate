@@ -1,50 +1,83 @@
-# Welcome to your Expo app 👋
+# ClarifyApp (MediMate)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+> AI-powered medicine scanner, medication tracker, and emergency SOS app for mobile devices.
 
-## Get started
+## Features
 
-1. Install dependencies
+- **AI Medicine Scanner:** Instantly identify medicines by scanning packaging or prescriptions using your camera and AI.
+- **Medication Tracking:** Schedule, track, and get reminders for your medications. View history and receive drug interaction alerts.
+- **Emergency SOS:** One-tap SOS sends your GPS location and medical ID to emergency contacts. Voice-activated support included.
+- **Offline Medicine Lookup:** Search for medicines and details even without internet access.
+- **Multi-language Support:** Translate medicine info and app content for accessibility.
+- **Secure Authentication:** Onboarding and login flow with persistent user sessions.
 
-   ```bash
-   npm install
-   ```
+## Getting Started
 
-2. Start the app
+### Prerequisites
 
-   ```bash
-   npx expo start
-   ```
+- [Node.js](https://nodejs.org/) (LTS recommended)
+- [Expo CLI](https://docs.expo.dev/get-started/installation/)
 
-In the output, you'll find options to open the app in a
+### Installation
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+```bash
+npm install
+```
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### Running the App
 
-## Get a fresh project
+```bash
+npx expo start
+```
 
-When you're ready, run:
+Open in Expo Go, Android emulator, or iOS simulator as prompted.
+
+### Resetting the Project
 
 ```bash
 npm run reset-project
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+This moves starter code to `app-example` and creates a blank `app` directory.
 
-## Learn more
+## Folder Structure
 
-To learn more about developing your project with Expo, look at the following resources:
+- `app/` — Main app screens and navigation (file-based routing)
+- `components/` — Reusable UI components
+- `constants/` — Color themes and UI constants
+- `services/` — API, authentication, AI proxy, and storage logic
+- `hooks/` — Custom React hooks
+- `assets/` — Images and static assets
+- `scripts/` — Utility scripts (e.g., project reset)
+- `android/` — Native Android project files
+- `functions/` — (If using serverless functions)
+- `utils/` — Utility helpers
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Key Technologies
 
-## Join the community
+- [Expo](https://expo.dev/) / React Native
+- TypeScript
+- AI integration (Google Gemini, AI proxy)
+- Firebase (for authentication)
+- Offline-first medicine database
 
-Join our community of developers creating universal apps.
+## Permissions
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+The app requests permissions for:
+
+- Camera (scanning medicines)
+- Location (emergency SOS)
+- Microphone (voice activation)
+- Notifications (reminders)
+
+## Contributing
+
+Pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change.
+
+## License
+
+MIT
+
+---
+
+_Created by Anna Patricia Vida_
