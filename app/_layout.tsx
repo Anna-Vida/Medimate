@@ -1,10 +1,11 @@
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { auth } from "@/services/firebase";
+import { warmOfflineMedicineLookupIndexes } from "@/services/offlineFallback";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
+    DarkTheme,
+    DefaultTheme,
+    ThemeProvider,
 } from "@react-navigation/native";
 import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -30,6 +31,9 @@ export default function RootLayout() {
 
     const init = async () => {
       try {
+        // Warm up the offline search index in the background
+        warmOfflineMedicineLookupIndexes();
+
         const onboardingDone = await AsyncStorage.getItem(ONBOARDING_KEY);
         unsubscribe = onAuthStateChanged(auth, (user) => {
           if (!isMounted) return;

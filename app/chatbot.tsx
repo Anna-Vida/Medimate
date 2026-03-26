@@ -1,17 +1,18 @@
 import { Ionicons } from "@expo/vector-icons";
+import NetInfo, { NetInfoState } from "@react-native-community/netinfo";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AppHeader from "../components/app-header";
@@ -20,13 +21,13 @@ import { Radius, Spacing } from "../constants/ui";
 import { ChatMessage, getChatbotReply } from "../services/chatbot";
 import { LANGUAGES, Language } from "../services/languages";
 import {
-    checkSpeechRecognitionAvailable,
-    requestSpeechPermission,
-    speakText,
-    startListening,
-    stopListening,
-    stopSpeaking,
-    useSpeechRecognitionEvent,
+  checkSpeechRecognitionAvailable,
+  requestSpeechPermission,
+  speakText,
+  startListening,
+  stopListening,
+  stopSpeaking,
+  useSpeechRecognitionEvent,
 } from "../services/speechService";
 
 interface UIChatMessage extends ChatMessage {
@@ -50,6 +51,7 @@ export default function ChatbotScreen() {
     LANGUAGES[0],
   );
   const [isListening, setIsListening] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
   const [speakingKey, setSpeakingKey] = useState<string | null>(null);
   const [messages, setMessages] = useState<UIChatMessage[]>([
     {
@@ -93,6 +95,13 @@ export default function ChatbotScreen() {
   });
 
   useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state: NetInfoState) => {
+      setIsOffline(!(state.isConnected && state.isInternetReachable));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
     const t = setTimeout(() => {
       chatRef.current?.scrollToEnd({ animated: true });
     }, 70);
@@ -106,7 +115,7 @@ export default function ChatbotScreen() {
       return;
     }
 
-    const nextMessages: UIChatMessage[] = [
+    const nextMessages: UIChatMessage[] = [  
       ...messages,
       { role: "user", content: prompt, timestamp: Date.now() },
     ];
@@ -150,10 +159,17 @@ export default function ChatbotScreen() {
 
     stopSpeaking();
     setSpeakingKey(key);
+    
+    // Fallback for languages that might not have a dedicated TTS engine on the device.
+    // The content is already translated, so it will still read in the target language.
+    const ttsLang = ["fil-PH"].includes(selectedLanguage.code)
+      ? "en-US"
+      : selectedLanguage.code;
+
     speakText(
       text,
       () => setSpeakingKey((prev) => (prev === key ? null : prev)),
-      selectedLanguage.code,
+      ttsLang,
     );
   };
 
@@ -165,6 +181,14 @@ export default function ChatbotScreen() {
   }, []);
 
   const handleMicPress = async () => {
+    if (isOffline) {
+      Alert.alert(
+        "Offline Mode",
+        "Voice input requires an internet connection. Please connect to the internet to use this feature.",
+      );
+      return;
+    }
+
     if (isListening) {
       await stopListening();
       setIsListening(false);
@@ -345,10 +369,10 @@ export default function ChatbotScreen() {
             style={[
               styles.micButton,
               isListening && styles.micButtonActive,
-              loading && { opacity: 0.5 },
+              (loading || isOffline) && { opacity: 0.5 },
             ]}
             onPress={handleMicPress}
-            disabled={loading}
+            disabled={loading || isOffline}
             activeOpacity={0.85}
           >
             <Ionicons

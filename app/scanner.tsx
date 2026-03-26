@@ -46,6 +46,7 @@ import {
     OfflinePrescriptionIdentity,
 } from "../services/offlineOcr";
 import { getRecentScans, SavedScan, saveScan } from "../services/storage";
+import { isInternetAvailable } from "../services/network";
 import { moderateScale, scale, verticalScale } from "../utils/responsive";
 // Configure notification handler
 try {
@@ -827,6 +828,7 @@ export default function Scanner() {
     if (cameraRef.current) {
       const result = await cameraRef.current.takePictureAsync({
         quality: 0.3,
+        skipProcessing: true,
       });
       if (result) {
         setPhoto(result.uri);
@@ -911,6 +913,51 @@ export default function Scanner() {
     setError(null);
     setInteractionReport(null);
     try {
+      const online = await isInternetAvailable();
+      if (!online) {
+        const ocrResult = await extractOfflineOcrResult(photo);
+        if (ocrResult?.records && ocrResult.records.length > 0) {
+          const analysisResults = ocrResult.records.map((record) =>
+            mapOfflineRecordToAnalysis(
+              record,
+              ocrResult.identity,
+              ocrResult.recognizedText,
+            ),
+          );
+          setResults(analysisResults);
+          await saveScan(analysisResults, photo);
+          for (const med of analysisResults) {
+            await saveMedication(photo, med);
+          }
+          setShowOfflineSearchModal(false);
+          setInteractionReport(null);
+          
+          // Interaction Check for offline multiple meds
+          if (analysisResults.length > 1) {
+            const report = await analyzeInteractions(analysisResults);
+            setInteractionReport(report);
+          }
+        } else {
+          const fileName = decodeURIComponent(photo.split("/").pop() || "")
+            .replace(/\.[a-z0-9]+$/i, "")
+            .replace(/[_-]+/g, " ")
+            .trim();
+          const localMatch = fileName
+            ? findOfflineMedicineByName(fileName)
+            : null;
+          if (localMatch) {
+            const analysisResults = [mapOfflineRecordToAnalysis(localMatch)];
+            setResults(analysisResults);
+            await saveScan(analysisResults, photo);
+            await saveMedication(photo, analysisResults[0]);
+            setShowOfflineSearchModal(false);
+            setInteractionReport(null);
+          } else {
+            setShowOfflineSearchModal(true);
+          }
+        }
+        return;
+      }
       // 1. Identification
       const analysis = await analyzeMedicineImage(photo, scanMode);
       setResults(analysis);
@@ -920,17 +967,26 @@ export default function Scanner() {
         analysis[0]?.medicineName === "Offline Scan Mode"
       ) {
         const ocrResult = await extractOfflineOcrResult(photo);
-        if (ocrResult?.record) {
-          const enriched = mapOfflineRecordToAnalysis(
-            ocrResult.record,
-            ocrResult.identity,
-            ocrResult.recognizedText,
+        if (ocrResult?.records && ocrResult.records.length > 0) {
+          const analysisResults = ocrResult.records.map((record) =>
+            mapOfflineRecordToAnalysis(
+              record,
+              ocrResult.identity,
+              ocrResult.recognizedText,
+            ),
           );
-          setResults([enriched]);
-          await saveScan([enriched], photo);
-          await saveMedication(photo, enriched);
+          setResults(analysisResults);
+          await saveScan(analysisResults, photo);
+          for (const med of analysisResults) {
+            await saveMedication(photo, med);
+          }
           setShowOfflineSearchModal(false);
           setInteractionReport(null);
+          
+          if (analysisResults.length > 1) {
+            const report = await analyzeInteractions(analysisResults);
+            setInteractionReport(report);
+          }
         } else {
           setShowOfflineSearchModal(true);
         }
@@ -963,7 +1019,11 @@ export default function Scanner() {
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Analysis failed.");
+      if (err instanceof Error && err.message === "OFFLINE_MODE") {
+        setShowOfflineSearchModal(true);
+      } else {
+        setError(err instanceof Error ? err.message : "Analysis failed.");
+      }
     } finally {
       setIsAnalyzing(false);
     }

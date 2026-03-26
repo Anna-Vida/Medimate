@@ -22,35 +22,44 @@ function extractMedicineCandidates(message: string): string[] {
   const compact = norm(message);
   const candidates = new Set<string>();
 
+  // 1. Direct match if the whole message is a medicine name
   if (compact && compact.length <= 32) {
     candidates.add(compact);
   }
 
-  const phraseMatches = compact.match(
-    /(?:about|for|is|what is|tell me about|medicine|drug|tablet|capsule)\s+([a-z0-9\s-]{4,40})/g,
-  );
+  // 2. Pattern-based extraction (English & Tagalog)
+  const patterns = [
+    /(?:about|for|is|what is|tell me about|medicine|drug|tablet|capsule|gamot|para sa|tungkol sa)\s+([a-z0-9\s-]{4,40})/g,
+    /(?:take|dosing|dosage|inumin|dosage ng)\s+([a-z0-9\s-]{4,40})/g,
+    /(?:price of|cost of|magkano ang|presyo ng)\s+([a-z0-9\s-]{4,40})/g,
+  ];
 
-  for (const phrase of phraseMatches ?? []) {
-    const cleaned = phrase
-      .replace(
-        /^(about|for|is|what is|tell me about|medicine|drug|tablet|capsule)\s+/,
-        "",
-      )
-      .trim();
-    if (cleaned.length >= 4 && cleaned.length <= 32) {
-      candidates.add(cleaned);
+  for (const pattern of patterns) {
+    const matches = compact.matchAll(pattern);
+    for (const match of matches) {
+      const cleaned = match[1].trim();
+      if (cleaned.length >= 4 && cleaned.length <= 32) {
+        candidates.add(cleaned);
+      }
     }
   }
 
-  const tokens = tokenize(compact).slice(0, 6);
-  for (let index = 0; index < tokens.length; index += 1) {
-    candidates.add(tokens[index]);
-    if (index < tokens.length - 1) {
-      candidates.add(`${tokens[index]} ${tokens[index + 1]}`);
+  // 3. Sliding window tokenization (n-grams)
+  const tokens = compact.split(" ").filter((t) => t.length >= 4);
+  for (let i = 0; i < tokens.length; i++) {
+    // Single word
+    candidates.add(tokens[i]);
+    // Two words
+    if (i < tokens.length - 1) {
+      candidates.add(`${tokens[i]} ${tokens[i + 1]}`);
+    }
+    // Three words
+    if (i < tokens.length - 2) {
+      candidates.add(`${tokens[i]} ${tokens[i + 1]} ${tokens[i + 2]}`);
     }
   }
 
-  return Array.from(candidates).slice(0, 10);
+  return Array.from(candidates).slice(0, 15);
 }
 
 let exactMatchIndex: Map<string, OfflineMedicineRecord> | null = null;
@@ -243,6 +252,15 @@ const HIGH_RISK_PAIRS = [
   ["warfarin", "ibuprofen"],
   ["warfarin", "diclofenac"],
   ["aspirin", "ibuprofen"],
+  ["metformin", "alcohol"],
+  ["losartan", "spironolactone"],
+  ["amlodipine", "simvastatin"],
+  ["digoxin", "furosemide"],
+  ["clopidogrel", "omeprazole"],
+  ["warfarin", "naproxen"],
+  ["aspirin", "warfarin"],
+  ["aspirin", "clopidogrel"],
+  ["ibuprofen", "aspirin"],
 ];
 
 function pairMatches(
@@ -307,29 +325,120 @@ export function getOfflineDrugInteraction(
 export function getOfflineChatbotReply(message: string): string {
   const text = norm(message);
 
-  if (text.includes("emergency") || text.includes("sos")) {
-    return "Offline mode: If there is severe chest pain, breathing difficulty, stroke signs, or heavy bleeding, call emergency services immediately (911) and use your Emergency screen quick actions.";
+  // 0. Direct Medicine Name Check (Priority)
+  // If the user types just "sambong" or "what is tamsulosin", match it immediately.
+  const candidates = extractMedicineCandidates(message);
+  for (const candidate of candidates) {
+    const matched = findOfflineMedicineByName(candidate);
+    if (matched) {
+      // Return a comprehensive info card if matched directly
+      return `Offline mode: **${matched.name}** (${matched.genericName})\n` +
+             `Uses: ${matched.commonUses}\n` +
+             `Price: ${matched.estimatedPrice}\n` +
+             `Warning: ${matched.warnings}`;
+    }
   }
 
-  if (text.includes("reminder") || text.includes("missed dose")) {
-    return "Offline mode: If you missed a dose, take it as soon as remembered unless it is close to the next dose. Do not double-dose unless your doctor advised it.";
+  // Emergency / SOS (English & Tagalog)
+  if (
+    text.includes("emergency") ||
+    text.includes("sos") ||
+    text.includes("saklolo") ||
+    text.includes("tulong") ||
+    text.includes("panganib")
+  ) {
+    return "Offline mode: If there is severe chest pain, breathing difficulty, stroke signs, or heavy bleeding, call 911 immediately. Use the 'Emergency' screen for quick actions.";
   }
 
+  // Reminders / Dosing (English & Tagalog)
+  if (
+    text.includes("reminder") ||
+    text.includes("missed dose") ||
+    text.includes("nakalimutan") ||
+    text.includes("paano inumin") ||
+    text.includes("dose")
+  ) {
+    return "Offline mode: If you missed a dose, take it as soon as remembered unless it's close to the next dose. Do not double-dose. For specific dosing instructions, please consult your doctor or pharmacist.";
+  }
+
+  // Generic / Brand Name (English & Tagalog)
+  if (
+    text.includes("generic") ||
+    text.includes("brand") ||
+    text.includes("pangalan") ||
+    text.includes("ibang pangalan")
+  ) {
+    for (const candidate of extractMedicineCandidates(message)) {
+      const matched = findOfflineMedicineByName(candidate);
+      if (matched) {
+        return `Offline mode: ${matched.name} is also known by its generic name ${matched.genericName}. Other brand names/aliases: ${matched.aliases.join(", ")}.`;
+      }
+    }
+  }
+
+  // Price / Cost (English & Tagalog)
+  if (
+    text.includes("price") ||
+    text.includes("cost") ||
+    text.includes("magkano") ||
+    text.includes("presyo") ||
+    text.includes("bayad")
+  ) {
+    for (const candidate of extractMedicineCandidates(message)) {
+      const matched = findOfflineMedicineByName(candidate);
+      if (matched) {
+        return `Offline mode: ${matched.name} estimated price is ${matched.estimatedPrice}. Note: Prices vary by pharmacy and generic brands are usually cheaper.`;
+      }
+    }
+    return "Offline mode: I can't find the price for that specific medicine. In general, generic medicines in the Philippines are 50-90% cheaper than branded ones.";
+  }
+
+  // Use / Purpose / Side Effects / Warnings (English & Tagalog)
   if (
     text.includes("side effect") ||
     text.includes("warning") ||
     text.includes("use for") ||
     text.includes("what is") ||
     text.includes("medicine") ||
-    text.includes("drug")
+    text.includes("drug") ||
+    text.includes("gamot") ||
+    text.includes("para saan") ||
+    text.includes("bawal") ||
+    text.includes("babala")
   ) {
     for (const candidate of extractMedicineCandidates(message)) {
       const matched = findOfflineMedicineByName(candidate);
       if (matched) {
-        return `Offline mode: ${matched.name} is commonly used for ${matched.commonUses}. Warning: ${matched.warnings}. Common side effects: ${matched.sideEffects.join(", ")}.`;
+        return `Offline mode: ${matched.name} is commonly used for ${matched.commonUses}. \n\nWarning: ${matched.warnings}. \n\nSide effects: ${matched.sideEffects.join(", ")}.`;
       }
     }
   }
 
-  return "Offline mode is active. I can give basic guidance from local data, but for full AI analysis and personalized checks, reconnect to the internet.";
+  // Interaction check (English & Tagalog)
+  if (
+    text.includes("interaction") ||
+    text.includes("combine") ||
+    text.includes("sabay") ||
+    text.includes("pagsamahin")
+  ) {
+    const candidates = extractMedicineCandidates(message);
+    if (candidates.length >= 2) {
+      const result = getOfflineDrugInteraction(candidates[0], candidates[1]);
+      return `Offline mode interaction check: ${result.interaction} \n\nRecommendation: ${result.recommendation}`;
+    }
+    return "Offline mode: To check for interactions, please mention both medicine names (e.g., 'Can I take Aspirin and Warfarin together?').";
+  }
+
+  // PhilHealth / Discounts (English & Tagalog)
+  if (
+    text.includes("philhealth") ||
+    text.includes("discount") ||
+    text.includes("libre") ||
+    text.includes("senior") ||
+    text.includes("pwd")
+  ) {
+    return "Offline mode: Seniors and PWDs are entitled to a 20% discount and VAT exemption on medicines. Some medicines are covered by PhilHealth's Konsulta package. Ask your local health center.";
+  }
+
+  return "Offline mode is active. I can help with basic medicine info (uses, warnings, price, generic names) from local data. For personalized AI advice, please reconnect to the internet.";
 }

@@ -4,8 +4,39 @@ import { isInternetAvailable } from "./network";
 import { getOfflineChatbotReply } from "./offlineFallback";
 
 const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
 const genAI = new GoogleGenerativeAI(API_KEY || "");
 const CHATBOT_TIMEOUT_MS = 15000;
+
+async function generateOpenAiChat(
+  messages: ChatMessage[],
+  languageName: string,
+): Promise<string> {
+  if (!OPENAI_API_KEY) throw new Error("OPENAI_KEY_MISSING");
+
+  const prompt = buildPrompt(messages, languageName);
+
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 500,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(`OpenAI Error: ${err.error?.message || response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content.trim();
+}
 
 async function withTimeout<T>(
   promise: Promise<T>,
@@ -32,7 +63,13 @@ function isApiKeyIssue(error: unknown): boolean {
     text.includes("api_key_invalid") ||
     text.includes("api key expired") ||
     text.includes("api key invalid") ||
-    text.includes("key expired")
+    text.includes("key expired") ||
+    text.includes("token is expired") ||
+    text.includes("expired token") ||
+    text.includes("401") ||
+    text.includes("403") ||
+    text.includes("404") ||
+    text.includes("not found")
   );
 }
 
@@ -114,53 +151,71 @@ export async function getChatbotReply(
   const languageScopedConversation =
     `Preferred response language: ${languageName}.\n` + conversation;
 
-  if (hasAiProxy()) {
-    try {
-      const text = await withTimeout(
-        callAiProxy({
-          task: "chatbot",
-          prompt: languageScopedConversation,
-          model: "gemini-2.5-flash",
-        }),
-        CHATBOT_TIMEOUT_MS,
-      );
-
-      return sanitizeChatResponse(
-        text || "I could not generate a response right now. Please try again.",
-      );
-    } catch (error) {
-      console.error("Chatbot proxy error:", error);
-      if (shouldUseOfflineFallback(error)) {
+  try {
+    if (!hasAiProxy()) {
+      if (!API_KEY && !OPENAI_API_KEY) {
         return sanitizeChatResponse(getOfflineChatbotReply(latest));
       }
-      return "I could not reach the AI service right now. Please check your internet and try again.";
+
+      if (API_KEY) {
+        try {
+          const prompt = buildPrompt(messages, languageName);
+          const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+          const result = await withTimeout(
+            model.generateContent(prompt),
+            CHATBOT_TIMEOUT_MS,
+          );
+          return sanitizeChatResponse(result.response.text().trim());
+        } catch (error) {
+          console.warn("Gemini Chatbot failed, trying OpenAI fallback");
+          if (OPENAI_API_KEY) {
+            try {
+              return sanitizeChatResponse(await generateOpenAiChat(messages, languageName));
+            } catch (openAiErr) {
+              console.error("OpenAI Fallback failed:", openAiErr);
+              return sanitizeChatResponse(getOfflineChatbotReply(latest));
+            }
+          }
+          if (shouldUseOfflineFallback(error)) {
+            return sanitizeChatResponse(getOfflineChatbotReply(latest));
+          }
+          throw error;
+        }
+      } else if (OPENAI_API_KEY) {
+        try {
+          return sanitizeChatResponse(await generateOpenAiChat(messages, languageName));
+        } catch (openAiErr) {
+          return sanitizeChatResponse(getOfflineChatbotReply(latest));
+        }
+      }
     }
-  }
-
-  if (!API_KEY) {
-    return sanitizeChatResponse(getOfflineChatbotReply(latest));
-  }
-
-  try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const result = await withTimeout(
-      model.generateContent(buildPrompt(messages, languageName)),
+    const text = await withTimeout(
+      callAiProxy({
+        task: "chatbot",
+        prompt: languageScopedConversation,
+        model: "gemini-1.5-pro",
+      }),
       CHATBOT_TIMEOUT_MS,
     );
-    const text = result.response.text().trim();
 
     return sanitizeChatResponse(
       text || "I could not generate a response right now. Please try again.",
     );
   } catch (error) {
-    if (String(error).includes("AI_TIMEOUT")) {
-      return "The AI response took too long. Please try again or ask a shorter question.";
+    console.error("Chatbot proxy error:", JSON.stringify(error, null, 2));
+
+    // Try OpenAI as a last resort before offline if proxy fails
+    if (OPENAI_API_KEY) {
+      try {
+        return sanitizeChatResponse(await generateOpenAiChat(messages, languageName));
+      } catch (openAiErr) {
+        // proceed to offline
+      }
     }
+
     if (shouldUseOfflineFallback(error)) {
       return sanitizeChatResponse(getOfflineChatbotReply(latest));
     }
-
-    console.error("Chatbot error:", error);
-    return "I could not reach the AI service right now. Please check your internet and try again.";
+    return `I could not reach the AI service right now. Please check your internet and try again. Details: ${String(error)}`;
   }
 }

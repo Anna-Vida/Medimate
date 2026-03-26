@@ -3,22 +3,22 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   Alert,
-    RefreshControl,
-    SafeAreaView,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import AppHeader from "../components/app-header";
 import { Colors } from "../constants/Colors";
 import {
-    deleteReminder,
-    getAllReminders,
-    ReminderSchedule,
+  deleteReminder,
+  getAllReminders,
+  ReminderSchedule,
 } from "../services/medicationStorage";
 import { moderateScale, scale, verticalScale } from "../utils/responsive";
 
