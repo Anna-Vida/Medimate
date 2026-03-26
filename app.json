@@ -5,7 +5,7 @@
     "slug": "MediMate",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/apk_logo.png",
+    "icon": "./assets/images/MEDIMATE LOGO.png",
     "scheme": "medimate",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -18,7 +18,7 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
-        "foregroundImage": "./assets/images/apk_logo.png",
+        "foregroundImage": "./assets/images/MEDIMATE LOGO.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
@@ -54,7 +54,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/MEDIMATE LOGO.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",

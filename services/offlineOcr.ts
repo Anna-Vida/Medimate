@@ -1,6 +1,6 @@
 import { findOfflineMedicineByName } from "./offlineFallback";
 import {
-    OfflineMedicineRecord
+  OfflineMedicineRecord
 } from "./offlineMedicineData";
 
 const OCR_TIMEOUT_MS = 5000;
@@ -183,21 +183,24 @@ function findBestMedicineMatch(text: string): OfflineMedicineRecord[] {
     .split(/\n+/)
     .map((line) => line.trim())
     .filter((l) => Boolean(l) && !isNonMedicineLine(l))
-    .slice(0, 20); // More lines for multi-med
+    .slice(0, 30); // Process more lines
     
   const lineQueries = lines.map((l) => l);
   const normalizedText = normalize(text);
-  const words = Array.from(
-    new Set(normalizedText.split(" ").filter((w) => w.length >= 4 && !isNonMedicineLine(w))),
-  ).slice(0, 30);
   
-  const wordQueries = words;
+  // Extract all potential candidates from words
+  const words = normalizedText.split(" ").filter((w) => w.length >= 4 && !isNonMedicineLine(w));
+  
   const phraseQueries: string[] = [];
+  // Try 2-word and 3-word combinations to catch complex names
   for (let index = 0; index < words.length - 1; index += 1) {
     phraseQueries.push(`${words[index]} ${words[index + 1]}`);
+    if (index < words.length - 2) {
+      phraseQueries.push(`${words[index]} ${words[index + 1]} ${words[index + 2]}`);
+    }
   }
   
-  const all = [...lineQueries, ...wordQueries, ...phraseQueries].map(normalize).filter(Boolean);
+  const all = [...lineQueries, ...words, ...phraseQueries].map(normalize).filter(Boolean);
   return bestOfCandidates(all);
 }
 

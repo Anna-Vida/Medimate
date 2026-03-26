@@ -4,22 +4,23 @@ import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Linking,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Image,
+    Linking,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import Animated, {
-  FadeInDown,
-  FadeInUp,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming,
+    FadeInDown,
+    FadeInUp,
+    useAnimatedStyle,
+    useSharedValue,
+    withRepeat,
+    withSequence,
+    withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as AppTheme from "../../constants/Colors";
@@ -195,9 +196,16 @@ export default function App() {
           entering={FadeInDown.duration(600).delay(100)}
           style={styles.header}
         >
-          <View>
-            <Text style={styles.greetingText}>{greeting}</Text>
-            <Text style={styles.brandLabel}>MediMate</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Image 
+              source={require("../../assets/images/MEDIMATE LOGO.png")}
+              style={{ width: scale(40), height: scale(40), marginRight: scale(10) }}
+              resizeMode="contain"
+            />
+            <View>
+              <Text style={styles.greetingText}>{greeting}</Text>
+              <Text style={styles.brandLabel}>MediMate</Text>
+            </View>
           </View>
         </Animated.View>
 

@@ -111,6 +111,7 @@ const TEXT_AI_TIMEOUT_MS = 12000;
 async function generateOpenAiText(
   prompt: string,
   imageBase64?: string,
+  modelName: string = "gpt-4o",
 ): Promise<string> {
   if (!OPENAI_API_KEY) throw new Error("OPENAI_KEY_MISSING");
 
@@ -136,7 +137,7 @@ async function generateOpenAiText(
       Authorization: `Bearer ${OPENAI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: imageBase64 ? "gpt-4o" : "gpt-4o-mini",
+      model: modelName,
       messages,
       max_tokens: 1000,
     }),
@@ -204,35 +205,24 @@ async function generateGeminiText(
     throw new Error("OFFLINE_MODE");
   }
 
-  // Use a smaller, faster model if standard one fails
-  const modelToUse = "gemini-1.5-flash";
-  const fallbackModel = "gemini-1.5-flash-8b";
+  // Multi-tier Fallback Model Chain
+  const geminiModels = [
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-8b",
+    "gemini-1.5-pro",
+  ];
+  const openAiModels = imageBase64 ? ["gpt-4o", "gpt-4o-mini"] : ["gpt-4o-mini"];
 
   if (!hasAiProxy()) {
     if (!API_KEY && !OPENAI_API_KEY) {
       throw new Error("OFFLINE_MODE");
     }
 
-    // Try Gemini First
+    // Try Gemini models first
     if (API_KEY) {
-      try {
-        const model = genAI.getGenerativeModel({ model: modelToUse });
-        const result = imageBase64
-          ? await model.generateContent([
-              prompt,
-              {
-                inlineData: {
-                  data: imageBase64,
-                  mimeType: "image/jpeg",
-                },
-              },
-            ])
-          : await model.generateContent(prompt);
-        return result.response.text().trim();
-      } catch (error) {
-        console.warn(`Primary Gemini failed, trying fallback Gemini`);
+      for (const modelName of geminiModels) {
         try {
-          const model = genAI.getGenerativeModel({ model: fallbackModel });
+          const model = genAI.getGenerativeModel({ model: modelName });
           const result = imageBase64
             ? await model.generateContent([
                 prompt,
@@ -245,27 +235,27 @@ async function generateGeminiText(
               ])
             : await model.generateContent(prompt);
           return result.response.text().trim();
-        } catch (geminiError) {
-          console.warn("All Gemini models failed. Checking for OpenAI fallback.");
-          if (OPENAI_API_KEY) {
-            try {
-              return await generateOpenAiText(prompt, imageBase64);
-            } catch (openAiErr) {
-              console.error("OpenAI Fallback failed:", openAiErr);
-              throw new Error("OFFLINE_MODE");
-            }
-          }
-          throw new Error("OFFLINE_MODE");
+        } catch (error) {
+          console.warn(`Gemini model ${modelName} failed, trying next...`);
+          // Continue to next model
         }
       }
-    } else if (OPENAI_API_KEY) {
-      // If Gemini key is missing but OpenAI is there
-      try {
-        return await generateOpenAiText(prompt, imageBase64);
-      } catch (openAiErr) {
-        throw new Error("OFFLINE_MODE");
+    }
+
+    // If Gemini models fail, try OpenAI models
+    if (OPENAI_API_KEY) {
+      for (const modelName of openAiModels) {
+        try {
+          return await generateOpenAiText(prompt, imageBase64, modelName);
+        } catch (error) {
+          console.warn(`OpenAI model ${modelName} failed, trying next...`);
+          // Continue to next model
+        }
       }
     }
+
+    // If everything fails
+    throw new Error("OFFLINE_MODE");
   }
 
   try {
@@ -274,22 +264,24 @@ async function generateGeminiText(
         task: "generate",
         prompt,
         imageBase64,
-        model: modelToUse,
+        model: "gemini-1.5-flash",
       }),
       imageBase64 ? IMAGE_AI_TIMEOUT_MS : TEXT_AI_TIMEOUT_MS,
       "AI_TIMEOUT",
     );
   } catch (error) {
-    // If proxy fails and it's a transient error, try fallback locally if API_KEY exists
-    if ((API_KEY || OPENAI_API_KEY) && !imageBase64) {
+    // If proxy fails and it's a transient error, try local fallback chain
+    if (API_KEY || OPENAI_API_KEY) {
       try {
-        console.warn("Proxy failed, attempting local fallback model");
+        console.warn("Proxy failed, attempting local fallback chain");
         if (API_KEY) {
-          const model = genAI.getGenerativeModel({ model: fallbackModel });
+          const model = genAI.getGenerativeModel({
+            model: "gemini-1.5-flash-8b",
+          });
           const result = await model.generateContent(prompt);
           return result.response.text().trim();
-        } else {
-          return await generateOpenAiText(prompt);
+        } else if (OPENAI_API_KEY) {
+          return await generateOpenAiText(prompt, imageBase64, "gpt-4o-mini");
         }
       } catch (innerErr) {
         // ignore inner error, throw original

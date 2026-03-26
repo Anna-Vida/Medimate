@@ -907,6 +907,49 @@ export default function Scanner() {
       if (!isAuto) Alert.alert("Error", "Could not set reminder.");
     }
   };
+  const performOfflineIdentification = async (uri: string) => {
+    const ocrResult = await extractOfflineOcrResult(uri);
+    if (ocrResult?.records && ocrResult.records.length > 0) {
+      const analysisResults = ocrResult.records.map((record) =>
+        mapOfflineRecordToAnalysis(
+          record,
+          ocrResult.identity,
+          ocrResult.recognizedText,
+        ),
+      );
+      setResults(analysisResults);
+      await saveScan(analysisResults, uri);
+      for (const med of analysisResults) {
+        await saveMedication(uri, med);
+      }
+      setShowOfflineSearchModal(false);
+      setInteractionReport(null);
+
+      // Interaction Check for offline multiple meds
+      if (analysisResults.length > 1) {
+        const report = await analyzeInteractions(analysisResults);
+        setInteractionReport(report);
+      }
+      return true;
+    } else {
+      const fileName = decodeURIComponent(uri.split("/").pop() || "")
+        .replace(/\.[a-z0-9]+$/i, "")
+        .replace(/[_-]+/g, " ")
+        .trim();
+      const localMatch = fileName ? findOfflineMedicineByName(fileName) : null;
+      if (localMatch) {
+        const analysisResults = [mapOfflineRecordToAnalysis(localMatch)];
+        setResults(analysisResults);
+        await saveScan(analysisResults, uri);
+        await saveMedication(uri, analysisResults[0]);
+        setShowOfflineSearchModal(false);
+        setInteractionReport(null);
+        return true;
+      }
+    }
+    return false;
+  };
+
   const identifyMedicine = async () => {
     if (!photo) return;
     setIsAnalyzing(true);
@@ -915,115 +958,70 @@ export default function Scanner() {
     try {
       const online = await isInternetAvailable();
       if (!online) {
-        const ocrResult = await extractOfflineOcrResult(photo);
-        if (ocrResult?.records && ocrResult.records.length > 0) {
-          const analysisResults = ocrResult.records.map((record) =>
-            mapOfflineRecordToAnalysis(
-              record,
-              ocrResult.identity,
-              ocrResult.recognizedText,
-            ),
-          );
-          setResults(analysisResults);
-          await saveScan(analysisResults, photo);
-          for (const med of analysisResults) {
-            await saveMedication(photo, med);
-          }
-          setShowOfflineSearchModal(false);
-          setInteractionReport(null);
-          
-          // Interaction Check for offline multiple meds
-          if (analysisResults.length > 1) {
-            const report = await analyzeInteractions(analysisResults);
-            setInteractionReport(report);
-          }
-        } else {
-          const fileName = decodeURIComponent(photo.split("/").pop() || "")
-            .replace(/\.[a-z0-9]+$/i, "")
-            .replace(/[_-]+/g, " ")
-            .trim();
-          const localMatch = fileName
-            ? findOfflineMedicineByName(fileName)
-            : null;
-          if (localMatch) {
-            const analysisResults = [mapOfflineRecordToAnalysis(localMatch)];
-            setResults(analysisResults);
-            await saveScan(analysisResults, photo);
-            await saveMedication(photo, analysisResults[0]);
-            setShowOfflineSearchModal(false);
-            setInteractionReport(null);
-          } else {
-            setShowOfflineSearchModal(true);
-          }
+        const success = await performOfflineIdentification(photo);
+        if (!success) {
+          setShowOfflineSearchModal(true);
         }
         return;
       }
-      // 1. Identification
-      const analysis = await analyzeMedicineImage(photo, scanMode);
-      setResults(analysis);
 
-      if (
-        analysis.length === 1 &&
-        analysis[0]?.medicineName === "Offline Scan Mode"
-      ) {
-        const ocrResult = await extractOfflineOcrResult(photo);
-        if (ocrResult?.records && ocrResult.records.length > 0) {
-          const analysisResults = ocrResult.records.map((record) =>
-            mapOfflineRecordToAnalysis(
-              record,
-              ocrResult.identity,
-              ocrResult.recognizedText,
-            ),
-          );
-          setResults(analysisResults);
-          await saveScan(analysisResults, photo);
-          for (const med of analysisResults) {
-            await saveMedication(photo, med);
+      // 1. Identification
+      try {
+        const analysis = await analyzeMedicineImage(photo, scanMode);
+        setResults(analysis);
+
+        if (
+          analysis.length === 1 &&
+          analysis[0]?.medicineName === "Offline Scan Mode"
+        ) {
+          const success = await performOfflineIdentification(photo);
+          if (!success) {
+            setShowOfflineSearchModal(true);
           }
-          setShowOfflineSearchModal(false);
-          setInteractionReport(null);
-          
-          if (analysisResults.length > 1) {
-            const report = await analyzeInteractions(analysisResults);
-            setInteractionReport(report);
+          return;
+        }
+
+        await saveScan(analysis, photo);
+        // 1.5. Save to Medication Storage (for My Medications screen)
+        for (const medicine of analysis) {
+          try {
+            await saveMedication(photo, medicine);
+          } catch (err) {
+            console.error("Error saving to medication storage:", err);
+          }
+        }
+        // 2. Interaction Check (if > 1 med)
+        if (analysis.length > 1) {
+          const report = await analyzeInteractions(analysis);
+          setInteractionReport(report);
+        }
+        // 3. Auto-Schedule Reminders (Optional - maybe too aggressive for multi-meds)
+        if (analysis.length === 1 && analysis[0].recommendedTime) {
+          const [timeStr] = analysis[0].recommendedTime.split(" ");
+          const [h, m] = timeStr.split(":").map(Number);
+          if (!isNaN(h) && !isNaN(m)) {
+            setTimeout(
+              () => scheduleReminder(analysis[0].medicineName, h, m, true),
+              800,
+            );
+          }
+        }
+      } catch (innerErr) {
+        if (
+          innerErr instanceof Error &&
+          innerErr.message.includes("OFFLINE_MODE")
+        ) {
+          console.log("Online AI failed (quota/key), falling back to Local OCR");
+          const success = await performOfflineIdentification(photo);
+          if (!success) {
+            setShowOfflineSearchModal(true);
           }
         } else {
-          setShowOfflineSearchModal(true);
-        }
-      }
-
-      await saveScan(analysis, photo);
-      // 1.5. Save to Medication Storage (for My Medications screen)
-      for (const medicine of analysis) {
-        try {
-          await saveMedication(photo, medicine);
-        } catch (err) {
-          console.error("Error saving to medication storage:", err);
-        }
-      }
-      // 2. Interaction Check (if > 1 med)
-      if (analysis.length > 1) {
-        const report = await analyzeInteractions(analysis);
-        setInteractionReport(report);
-      }
-      // 3. Auto-Schedule Reminders (Optional - maybe too aggressive for multi-meds)
-      // Only auto-schedule if single med found for now to avoid spam
-      if (analysis.length === 1 && analysis[0].recommendedTime) {
-        const [timeStr] = analysis[0].recommendedTime.split(" ");
-        const [h, m] = timeStr.split(":").map(Number);
-        if (!isNaN(h) && !isNaN(m)) {
-          setTimeout(
-            () => scheduleReminder(analysis[0].medicineName, h, m, true),
-            800,
-          );
+          throw innerErr;
         }
       }
     } catch (err) {
-      if (err instanceof Error && err.message === "OFFLINE_MODE") {
-        setShowOfflineSearchModal(true);
-      } else {
-        setError(err instanceof Error ? err.message : "Analysis failed.");
-      }
+      setError(err instanceof Error ? err.message : "Analysis failed.");
     } finally {
       setIsAnalyzing(false);
     }

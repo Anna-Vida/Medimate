@@ -4,16 +4,18 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-    Alert,
-    KeyboardAvoidingView,
-    SafeAreaView,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { Colors } from "../../constants/Colors";
@@ -52,6 +54,22 @@ export default function LoginScreen() {
         Alert.alert("Account not found", "Sign up to create a new account.");
       else if (code === "invalid")
         Alert.alert("Wrong PIN", "Check your PIN and try again.");
+      else if (e?.message?.includes("blocked")) {
+        Alert.alert(
+            "Firebase Setup Required",
+            "Requests are blocked. Please enable 'Email/Password' in Firebase Console > Authentication > Sign-in method.",
+            [
+              { text: "I'll fix it", style: "cancel" },
+              { 
+                text: "Debug Login (Skip Auth)", 
+                onPress: async () => {
+                  await AsyncStorage.setItem("onboarding_done", "1");
+                  router.replace("/(tabs)");
+                }
+              }
+            ]
+          );
+      }
       else
         Alert.alert(
           "Error",
@@ -77,9 +95,11 @@ export default function LoginScreen() {
           >
             <Animated.View entering={FadeInDown.duration(600)}>
               <View style={styles.logoContainer}>
-                <View style={styles.logoBg}>
-                  <Ionicons name="medical" size={48} color={Colors.white} />
-                </View>
+                <Image 
+                  source={require("../../assets/images/MEDIMATE LOGO.png")}
+                  style={{ width: scale(120), height: scale(120), marginBottom: verticalScale(10) }}
+                  resizeMode="contain"
+                />
                 <Text style={styles.appName}>MediMate</Text>
                 <Text style={styles.tagline}>Your Health Companion</Text>
               </View>
@@ -155,29 +175,51 @@ export default function LoginScreen() {
 
               {/* Sign In Button */}
               <TouchableOpacity
-                style={[
-                  styles.primaryBtn,
-                  loading && styles.primaryBtnDisabled,
-                ]}
-                activeOpacity={0.85}
                 onPress={handleLogin}
+                activeOpacity={0.8}
                 disabled={loading}
+                style={[styles.primaryBtn, loading && styles.primaryBtnDisabled]}
               >
                 <LinearGradient
                   colors={[Colors.primary, Colors.primaryDark]}
                   style={styles.gradientBtn}
                 >
-                  <Ionicons name="log-in" size={20} color="#FFF" />
-                  <Text style={styles.primaryText}>
-                    {loading ? "Signing in..." : "Sign In"}
-                  </Text>
+                  {loading ? (
+                    <ActivityIndicator color={Colors.white} />
+                  ) : (
+                    <>
+                      <Text style={styles.primaryText}>Sign In</Text>
+                      <Ionicons
+                        name="arrow-forward"
+                        size={18}
+                        color={Colors.white}
+                      />
+                    </>
+                  )}
                 </LinearGradient>
+              </TouchableOpacity>
+
+              {/* Dev Bypass Button */}
+              <TouchableOpacity
+                onPress={async () => {
+                  await AsyncStorage.setItem("onboarding_done", "1");
+                  router.replace("/(tabs)");
+                }}
+                style={{
+                  paddingVertical: verticalScale(12),
+                  alignItems: 'center',
+                  marginTop: verticalScale(10),
+                }}
+              >
+                <Text style={{ color: Colors.primary, fontWeight: '600', fontSize: moderateScale(14) }}>
+                  Bypass Login (Developer Mode)
+                </Text>
               </TouchableOpacity>
 
               {/* Divider */}
               <View style={styles.dividerContainer}>
                 <View style={styles.divider} />
-                <Text style={styles.dividerText}>New to MediMate?</Text>
+                <Text style={styles.dividerText}>OR</Text>
                 <View style={styles.divider} />
               </View>
 

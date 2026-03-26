@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
     Alert,
+    Image,
     KeyboardAvoidingView,
     SafeAreaView,
     ScrollView,
@@ -170,13 +171,11 @@ export default function SignUpScreen() {
             </TouchableOpacity>
             <Animated.View entering={FadeInDown.duration(600)}>
               <View style={styles.logoContainer}>
-                <View style={styles.logoBg}>
-                  <Ionicons
-                    name="person-add-sharp"
-                    size={40}
-                    color={Colors.white}
-                  />
-                </View>
+                <Image 
+                  source={require("../../assets/images/MEDIMATE LOGO.png")}
+                  style={{ width: scale(80), height: scale(80), marginBottom: verticalScale(5) }}
+                  resizeMode="contain"
+                />
                 <Text style={styles.headerTitle}>Join MediMate</Text>
                 <Text style={styles.headerSubtitle}>
                   Create your health account

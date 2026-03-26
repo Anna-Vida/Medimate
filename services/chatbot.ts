@@ -11,6 +11,7 @@ const CHATBOT_TIMEOUT_MS = 15000;
 async function generateOpenAiChat(
   messages: ChatMessage[],
   languageName: string,
+  modelName: string = "gpt-4o-mini",
 ): Promise<string> {
   if (!OPENAI_API_KEY) throw new Error("OPENAI_KEY_MISSING");
 
@@ -23,7 +24,7 @@ async function generateOpenAiChat(
       Authorization: `Bearer ${OPENAI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
+      model: modelName,
       messages: [{ role: "user", content: prompt }],
       max_tokens: 500,
     }),
@@ -43,7 +44,7 @@ async function withTimeout<T>(
   timeoutMs: number,
 ): Promise<T> {
   return await new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("AI_TIMEOUT")), timeoutMs);
+    const timer = setTimeout(() => reject(new Error("CHAT_TIMEOUT")), timeoutMs);
 
     promise
       .then((value) => {
@@ -153,43 +154,47 @@ export async function getChatbotReply(
   const languageScopedConversation =
     `Preferred response language: ${languageName}.\n` + conversation;
 
+  const geminiModels = ["gemini-1.5-pro", "gemini-1.5-flash"];
+  const openAiModels = ["gpt-4o-mini", "gpt-4o"];
+
   try {
     if (!hasAiProxy()) {
       if (!API_KEY && !OPENAI_API_KEY) {
         return sanitizeChatResponse(getOfflineChatbotReply(latest));
       }
 
+      // Try Gemini models
       if (API_KEY) {
-        try {
-          const prompt = buildPrompt(messages, languageName);
-          const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
-          const result = await withTimeout(
-            model.generateContent(prompt),
-            CHATBOT_TIMEOUT_MS,
-          );
-          return sanitizeChatResponse(result.response.text().trim());
-        } catch (error) {
-          console.warn("Gemini Chatbot failed, trying OpenAI fallback");
-          if (OPENAI_API_KEY) {
-            try {
-              return sanitizeChatResponse(await generateOpenAiChat(messages, languageName));
-            } catch (openAiErr) {
-              console.error("OpenAI Fallback failed:", openAiErr);
-              return sanitizeChatResponse(getOfflineChatbotReply(latest));
-            }
+        for (const modelName of geminiModels) {
+          try {
+            const prompt = buildPrompt(messages, languageName);
+            const model = genAI.getGenerativeModel({ model: modelName });
+            const result = await withTimeout(
+              model.generateContent(prompt),
+              CHATBOT_TIMEOUT_MS,
+            );
+            return sanitizeChatResponse(result.response.text().trim());
+          } catch (error) {
+            console.warn(`Gemini model ${modelName} failed, trying next...`);
           }
-          if (shouldUseOfflineFallback(error)) {
-            return sanitizeChatResponse(getOfflineChatbotReply(latest));
-          }
-          throw error;
-        }
-      } else if (OPENAI_API_KEY) {
-        try {
-          return sanitizeChatResponse(await generateOpenAiChat(messages, languageName));
-        } catch (openAiErr) {
-          return sanitizeChatResponse(getOfflineChatbotReply(latest));
         }
       }
+
+      // Try OpenAI models
+      if (OPENAI_API_KEY) {
+        for (const modelName of openAiModels) {
+          try {
+            return sanitizeChatResponse(
+              await generateOpenAiChat(messages, languageName, modelName),
+            );
+          } catch (error) {
+            console.warn(`OpenAI model ${modelName} failed, trying next...`);
+          }
+        }
+      }
+
+      // If all fail
+      return sanitizeChatResponse(getOfflineChatbotReply(latest));
     }
     const text = await withTimeout(
       callAiProxy({
@@ -206,10 +211,12 @@ export async function getChatbotReply(
   } catch (error) {
     console.error("Chatbot proxy error:", JSON.stringify(error, null, 2));
 
-    // Try OpenAI as a last resort before offline if proxy fails
+    // Try OpenAI fallback if proxy fails
     if (OPENAI_API_KEY) {
       try {
-        return sanitizeChatResponse(await generateOpenAiChat(messages, languageName));
+        return sanitizeChatResponse(
+          await generateOpenAiChat(messages, languageName, "gpt-4o-mini"),
+        );
       } catch (openAiErr) {
         // proceed to offline
       }
