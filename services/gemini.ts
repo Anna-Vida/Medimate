@@ -189,7 +189,9 @@ function shouldFallbackToOffline(error: unknown): boolean {
     text.includes("401") ||
     text.includes("403") ||
     text.includes("404") ||
-    text.includes("not found")
+    text.includes("not found") ||
+    text.includes("billing") ||
+    text.includes("insufficient_quota")
   );
 }
 
