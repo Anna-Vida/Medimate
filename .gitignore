@@ -37,6 +37,7 @@ yarn-error.*
 # temp files
 nul
 tmpclaude-*
+.idea/
 
 # typescript
 *.tsbuildinfo

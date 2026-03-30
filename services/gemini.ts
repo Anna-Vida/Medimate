@@ -4,9 +4,9 @@ import { Platform } from "react-native";
 import { callAiProxy, hasAiProxy } from "./aiProxy";
 import { isInternetAvailable } from "./network";
 import {
-    findOfflineMedicineByName,
-    getOfflineDrugInteraction,
-    getOfflinePhilHealthInfo,
+  findOfflineMedicineByName,
+  getOfflineDrugInteraction,
+  getOfflinePhilHealthInfo,
 } from "./offlineFallback";
 
 // ========== FRAUD DETECTION UTILITIES ==========
@@ -103,54 +103,10 @@ function calculateAuthenticityScore(medicine: any): any {
 // ========== END FRAUD DETECTION ==========
 
 const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
+
 const genAI = new GoogleGenerativeAI(API_KEY || "");
 const IMAGE_AI_TIMEOUT_MS = 15000;
 const TEXT_AI_TIMEOUT_MS = 12000;
-
-async function generateOpenAiText(
-  prompt: string,
-  imageBase64?: string,
-  modelName: string = "gpt-4o",
-): Promise<string> {
-  if (!OPENAI_API_KEY) throw new Error("OPENAI_KEY_MISSING");
-
-  const messages = [
-    {
-      role: "user",
-      content: imageBase64
-        ? [
-            { type: "text", text: prompt },
-            {
-              type: "image_url",
-              image_url: { url: `data:image/jpeg;base64,${imageBase64}` },
-            },
-          ]
-        : prompt,
-    },
-  ];
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: modelName,
-      messages,
-      max_tokens: 1000,
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(`OpenAI Error: ${err.error?.message || response.statusText}`);
-  }
-
-  const data = await response.json();
-  return data.choices[0].message.content.trim();
-}
 
 async function withTimeout<T>(
   promise: Promise<T>,
@@ -199,92 +155,181 @@ function shouldFallbackToOffline(error: unknown): boolean {
 async function generateGeminiText(
   prompt: string,
   imageBase64?: string,
+  onStatusUpdate?: (status: string) => void,
 ): Promise<string> {
   const online = await isInternetAvailable();
   if (!online) {
     throw new Error("OFFLINE_MODE");
   }
 
-  // Multi-tier Fallback Model Chain
   const geminiModels = [
-    "gemini-1.5-flash",
-    "gemini-1.5-flash-8b",
-    "gemini-1.5-pro",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
   ];
-  const openAiModels = imageBase64 ? ["gpt-4o", "gpt-4o-mini"] : ["gpt-4o-mini"];
 
   if (!hasAiProxy()) {
-    if (!API_KEY && !OPENAI_API_KEY) {
+    if (!API_KEY) {
       throw new Error("OFFLINE_MODE");
     }
 
-    // Try Gemini models first
-    if (API_KEY) {
-      for (const modelName of geminiModels) {
-        try {
-          const model = genAI.getGenerativeModel({ model: modelName });
-          const result = imageBase64
-            ? await model.generateContent([
-                prompt,
-                {
-                  inlineData: {
-                    data: imageBase64,
-                    mimeType: "image/jpeg",
-                  },
+    console.log("Attempting Gemini...");
+    for (const modelName of geminiModels) {
+      try {
+        onStatusUpdate?.(`Trying Gemini (${modelName})...`);
+        console.log(`Trying Gemini model: ${modelName}`);
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = imageBase64
+          ? await model.generateContent([
+              prompt,
+              {
+                inlineData: {
+                  data: imageBase64,
+                  mimeType: "image/jpeg",
                 },
-              ])
-            : await model.generateContent(prompt);
-          return result.response.text().trim();
-        } catch (error) {
-          console.warn(`Gemini model ${modelName} failed, trying next...`);
-          // Continue to next model
-        }
+              },
+            ])
+          : await model.generateContent(prompt);
+
+        const text = result.response.text().trim();
+        console.log(`Gemini ${modelName} success!`);
+        return text;
+      } catch (error: any) {
+        console.warn(
+          `Gemini model ${modelName} failed:`,
+          error?.message || error,
+        );
       }
     }
 
-    // If Gemini models fail, try OpenAI models
-    if (OPENAI_API_KEY) {
-      for (const modelName of openAiModels) {
-        try {
-          return await generateOpenAiText(prompt, imageBase64, modelName);
-        } catch (error) {
-          console.warn(`OpenAI model ${modelName} failed, trying next...`);
-          // Continue to next model
-        }
-      }
-    }
-
-    // If everything fails
     throw new Error("OFFLINE_MODE");
   }
 
   try {
+    onStatusUpdate?.("Connecting via Proxy...");
     return await withTimeout(
       callAiProxy({
         task: "generate",
         prompt,
         imageBase64,
-        model: "gemini-1.5-flash",
+        model: "gemini-2.5-flash",
       }),
       imageBase64 ? IMAGE_AI_TIMEOUT_MS : TEXT_AI_TIMEOUT_MS,
       "AI_TIMEOUT",
     );
   } catch (error) {
-    // If proxy fails and it's a transient error, try local fallback chain
-    if (API_KEY || OPENAI_API_KEY) {
+    if (API_KEY) {
       try {
+        onStatusUpdate?.("Proxy failed, retrying locally...");
         console.warn("Proxy failed, attempting local fallback chain");
-        if (API_KEY) {
-          const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash-8b",
-          });
-          const result = await model.generateContent(prompt);
-          return result.response.text().trim();
-        } else if (OPENAI_API_KEY) {
-          return await generateOpenAiText(prompt, imageBase64, "gpt-4o-mini");
-        }
-      } catch (innerErr) {
+        const model = genAI.getGenerativeModel({
+          model: "gemini-2.5-flash-lite",
+        });
+        const result = imageBase64
+          ? await model.generateContent([
+              prompt,
+              {
+                inlineData: {
+                  data: imageBase64,
+                  mimeType: "image/jpeg",
+                },
+              },
+            ])
+          : await model.generateContent(prompt);
+        return result.response.text().trim();
+      } catch {
         // ignore inner error, throw original
+      }
+    }
+
+    if (shouldFallbackToOffline(error)) {
+      throw new Error("OFFLINE_MODE");
+    }
+    throw error;
+  }
+}
+
+async function generateGeminiOnlyText(
+  prompt: string,
+  imageBase64?: string,
+  onStatusUpdate?: (status: string) => void,
+): Promise<string> {
+  const online = await isInternetAvailable();
+  if (!online) {
+    throw new Error("OFFLINE_MODE");
+  }
+
+  const geminiModels = [
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+  ];
+
+  if (!hasAiProxy()) {
+    if (!API_KEY) {
+      throw new Error("OFFLINE_MODE");
+    }
+
+    console.log("Gemini-only scanner mode: attempting local Gemini...");
+    for (const modelName of geminiModels) {
+      try {
+        onStatusUpdate?.(`Trying Gemini (${modelName})...`);
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = imageBase64
+          ? await model.generateContent([
+              prompt,
+              {
+                inlineData: {
+                  data: imageBase64,
+                  mimeType: "image/jpeg",
+                },
+              },
+            ])
+          : await model.generateContent(prompt);
+
+        return result.response.text().trim();
+      } catch (error: any) {
+        console.warn(
+          `Gemini-only scanner model ${modelName} failed:`,
+          error?.message || error,
+        );
+      }
+    }
+
+    throw new Error("OFFLINE_MODE");
+  }
+
+  try {
+    onStatusUpdate?.("Connecting to Gemini...");
+    return await withTimeout(
+      callAiProxy({
+        task: "generate",
+        prompt,
+        imageBase64,
+        model: "gemini-2.5-flash",
+      }),
+      imageBase64 ? IMAGE_AI_TIMEOUT_MS : TEXT_AI_TIMEOUT_MS,
+      "AI_TIMEOUT",
+    );
+  } catch (error) {
+    if (API_KEY) {
+      try {
+        onStatusUpdate?.("Proxy failed, retrying Gemini locally...");
+        const model = genAI.getGenerativeModel({
+          model: "gemini-2.5-flash-lite",
+        });
+        const result = imageBase64
+          ? await model.generateContent([
+              prompt,
+              {
+                inlineData: {
+                  data: imageBase64,
+                  mimeType: "image/jpeg",
+                },
+              },
+            ])
+          : await model.generateContent(prompt);
+        return result.response.text().trim();
+      } catch {
+        // ignore inner error, throw original below
       }
     }
 
@@ -443,6 +488,7 @@ async function uriToBase64(uri: string): Promise<string> {
 export async function analyzeMedicineImage(
   imageUri: string,
   mode: "pill" | "prescription" = "pill",
+  onStatusUpdate?: (status: string) => void,
 ): Promise<MedicineAnalysis[]> {
   try {
     // Read the image file as base64 - Cross-platform helper
@@ -495,18 +541,35 @@ IMPORTANT:
 If you cannot clearly identify the medicine, state that in the fields or provide partial info.
 Do NOT use Markdown code blocks. Just return the raw JSON ARRAY string.`;
 
-    // Send the image and prompt to Gemini
+    // Scanner image analysis is Gemini-only.
     console.log(
       `Sending to Gemini... Payload size: ${(base64Image.length / 1024 / 1024).toFixed(2)} MB`,
     );
-    const startTime = Date.now();
-    const text = await generateGeminiText(prompt, base64Image);
+    const text = await generateGeminiOnlyText(
+      prompt,
+      base64Image,
+      onStatusUpdate,
+    );
 
     // Parse the response into structured format
     return parseMedicineResponse(text);
   } catch (error: any) {
     console.error("Error analyzing medicine image:", error);
-    if (String(error).includes("OFFLINE_MODE")) {
+    
+    // Treat almost any online error as a reason to fall back to offline mode
+    // to keep the app usable for the user.
+    const isOnlineError = 
+      String(error).includes("OFFLINE_MODE") || 
+      String(error).includes("401") || 
+      String(error).includes("403") || 
+      String(error).includes("404") || 
+      String(error).includes("quota") || 
+      String(error).includes("API key") ||
+      String(error).includes("timeout") ||
+      String(error).includes("fetch");
+
+    if (isOnlineError) {
+      console.log("Online analysis failed, triggering offline fallback...");
       // Best-effort offline match using image filename as hint (e.g. biogesic.jpg).
       const fileName = decodeURIComponent(imageUri.split("/").pop() || "")
         .replace(/\.[a-z0-9]+$/i, "")
@@ -515,6 +578,7 @@ Do NOT use Markdown code blocks. Just return the raw JSON ARRAY string.`;
       const localMatch = fileName ? findOfflineMedicineByName(fileName) : null;
 
       if (localMatch) {
+        console.log(`Found offline match for: ${fileName}`);
         return [
           {
             medicineName: localMatch.name,
@@ -543,12 +607,13 @@ Do NOT use Markdown code blocks. Just return the raw JSON ARRAY string.`;
         ];
       }
 
+      console.log("No specific offline match found, returning generic offline mode object.");
       return [
         {
           medicineName: "Offline Scan Mode",
           activeIngredients: "Not available offline",
           commonUses:
-            "Image AI analysis requires internet. No matching medicine was found in the local offline dataset.",
+            "Image AI analysis requires internet or a valid API key. No matching medicine was found in the local offline dataset.",
           dosage: "Unknown",
           warnings:
             "Offline scan cannot verify medicine identity. Confirm with a pharmacist before taking medication.",
@@ -558,12 +623,8 @@ Do NOT use Markdown code blocks. Just return the raw JSON ARRAY string.`;
         },
       ];
     }
-    if (String(error).includes("AI_TIMEOUT")) {
-      throw new Error(
-        "Analysis took too long. Try a clearer photo with the medicine name visible.",
-      );
-    }
-    // Show the actual error message for debugging
+    
+    // Show the actual error message for debugging if it's not a standard online error
     const errorMessage = error?.message || error?.toString() || "Unknown error";
     console.error("Detailed error:", errorMessage);
     throw new Error(`Failed to analyze: ${errorMessage}`);
@@ -650,7 +711,7 @@ function parseMedicineResponse(text: string): MedicineAnalysis[] {
     }
 
     return results;
-  } catch (e) {
+  } catch {
     console.error("Failed to parse Gemini JSON response:", text);
     // Fallback to simple text extraction if JSON parsing fails
     return [
@@ -797,20 +858,20 @@ async function withRetry<T>(
 }
 
 export async function translateBatch(
-  medicines: Array<{
+  medicines: {
     medicineName: string;
     commonUses: string;
     warnings: string | string[];
     simpleInstructions?: string;
-  }>,
+  }[],
   targetLanguage: string,
 ): Promise<
-  Array<{
+  {
     name: string;
     purpose: string;
     warnings: string;
     simpleInstructions?: string;
-  }>
+  }[]
 > {
   const fallback = medicines.map((m) => ({
     name: m.medicineName,
@@ -850,13 +911,13 @@ ${JSON.stringify(payload, null, 2)}`;
       .replace(/```\n?/g, "")
       .trim();
 
-    const parsed: Array<{
+    const parsed: {
       id: number;
       name: string;
       purpose: string;
       warnings: string;
       simpleInstructions?: string;
-    }> = JSON.parse(raw);
+    }[] = JSON.parse(raw);
 
     return medicines.map((_, i) => {
       const found = parsed.find((p) => p.id === i);

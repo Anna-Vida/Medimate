@@ -1,6 +1,5 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import * as Notifications from "expo-notifications";
 import * as Speech from "expo-speech";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -45,24 +44,24 @@ import {
     extractOfflineOcrResult,
     OfflinePrescriptionIdentity,
 } from "../services/offlineOcr";
+import {
+    addReminderNotificationListener,
+    areNotificationsSupported,
+    configureNotificationHandler,
+    configureReminderChannel,
+    requestReminderPermissions,
+    scheduleReminderNotification,
+} from "../services/notifications";
 import { getRecentScans, SavedScan, saveScan } from "../services/storage";
 import { isInternetAvailable } from "../services/network";
 import { moderateScale, scale, verticalScale } from "../utils/responsive";
 // Configure notification handler
 try {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
+  configureNotificationHandler();
 } catch (e) {
   console.warn("Notification handler setup failed:", e);
 }
-// ─── Language List ────────────────────────────────────────────────────────────
+// ΓöÇΓöÇΓöÇ Language List ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 // Replaced by shared service import
 // --- Helper Components ---
 // Recent Scans Modal (Bottom Sheet Style)
@@ -448,7 +447,7 @@ const CustomTimePicker = ({
     </Modal>
   );
 };
-// ─── Language Picker Component ───────────────────────────────────────────────
+// ΓöÇΓöÇΓöÇ Language Picker Component ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 const LanguagePicker = ({
   visible,
   selected,
@@ -677,6 +676,38 @@ export default function Scanner() {
     },
   });
 
+  const persistAnalysisResults = (analysisResults: MedicineAnalysis[]) => {
+    void (async () => {
+      try {
+        await saveScan(analysisResults, photo || "unknown-scan");
+      } catch (err) {
+        console.error("Error saving scan:", err);
+      }
+
+      for (const medicine of analysisResults) {
+        try {
+          await saveMedication(photo || "unknown-scan", medicine);
+        } catch (err) {
+          console.error("Error saving to medication storage:", err);
+        }
+      }
+    })();
+  };
+
+  const runInteractionAnalysis = (analysisResults: MedicineAnalysis[]) => {
+    if (analysisResults.length <= 1) {
+      setInteractionReport(null);
+      return;
+    }
+
+    void analyzeInteractions(analysisResults)
+      .then(setInteractionReport)
+      .catch((err) => {
+        console.error("Error analyzing interactions:", err);
+        setInteractionReport(null);
+      });
+  };
+
   const handleOfflineSearch = () => {
     const query = offlineSearchInput.trim();
     if (!query) {
@@ -700,7 +731,7 @@ export default function Scanner() {
     setInteractionReport(null);
     setShowOfflineSearchModal(false);
   };
-  // TTS Handler — uses pre-translated text when available, otherwise translates on-the-fly
+  // TTS Handler ΓÇö uses pre-translated text when available, otherwise translates on-the-fly
   const handleSpeak = async (text: string, cardIndex?: number) => {
     try {
       Speech.stop();
@@ -730,7 +761,7 @@ export default function Scanner() {
       setSpeakingIndex(null);
     }
   };
-  // Auto-translate results when language changes — ONE batched Gemini call
+  // Auto-translate results when language changes ΓÇö ONE batched Gemini call
   useEffect(() => {
     if (results.length === 0) return;
     if (selectedLang.geminiName === "English") {
@@ -764,17 +795,10 @@ export default function Scanner() {
   // Setup Notification Channel for Android + Notification Listener
   useEffect(() => {
     if (Platform.OS === "android") {
-      Notifications.setNotificationChannelAsync("medicine-reminders", {
-        name: "Medicine Reminders",
-        importance: Notifications.AndroidImportance.MAX,
-        sound: "default",
-        vibrationPattern: [0, 250, 250, 250],
-        enableVibrate: true,
-        showBadge: true,
-      });
+      void configureReminderChannel();
     }
     // Listen for notifications and speak the alarm
-    const subscription = Notifications.addNotificationReceivedListener(
+    const subscription = addReminderNotificationListener(
       (notification) => {
         const data = notification.request.content.data;
         const medicineName = data?.medicine || "your medicine";
@@ -844,8 +868,7 @@ export default function Scanner() {
     setExpandedMedIndex(0);
   };
   const requestNotificationPermissions = async () => {
-    const { status } = await Notifications.requestPermissionsAsync();
-    return status === "granted";
+    return await requestReminderPermissions();
   };
   const scheduleReminder = async (
     medicineName: string,
@@ -855,6 +878,13 @@ export default function Scanner() {
     toneId: string = "standard",
   ) => {
     try {
+      if (!areNotificationsSupported()) {
+        Alert.alert(
+          "Development Build Required",
+          "Medicine reminders are not available in Expo Go. Use a development build to test notifications.",
+        );
+        return;
+      }
       const hasPermission = await requestNotificationPermissions();
       if (!hasPermission) {
         Alert.alert(
@@ -872,23 +902,14 @@ export default function Scanner() {
         (scheduledTime.getTime() - now.getTime()) / 1000,
       );
       const tone = ALARM_TONES.find((t) => t.id === toneId) || ALARM_TONES[1];
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "💊 Medicine Reminder",
-          body: `It's time for your ${medicineName}`,
-          sound: toneId !== "silent",
-          data: { medicine: medicineName, tone: toneId },
-          priority:
-            toneId === "urgent" || toneId === "alarm"
-              ? Notifications.AndroidNotificationPriority.MAX
-              : Notifications.AndroidNotificationPriority.HIGH,
-          vibrate: tone.pattern,
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-          seconds: secondsUntil,
-          channelId: "medicine-reminders",
-        },
+      await scheduleReminderNotification({
+        title: "Medicine Reminder",
+        body: `It's time for your ${medicineName}`,
+        sound: toneId !== "silent",
+        data: { medicine: medicineName, tone: toneId },
+        highPriority: toneId === "urgent" || toneId === "alarm",
+        vibrate: tone.pattern,
+        secondsUntil,
       });
       const timeString = scheduledTime.toLocaleTimeString([], {
         hour: "2-digit",
@@ -897,7 +918,6 @@ export default function Scanner() {
       const toneLabel = tone.name;
       console.log("Setting success message:", timeString, toneLabel);
       setSuccessMessage({ time: timeString, tone: toneLabel, isAuto });
-      // Delay to ensure time picker modal closes first
       setTimeout(() => {
         console.log("Showing success modal now!");
         setShowSuccessModal(true);
@@ -907,49 +927,6 @@ export default function Scanner() {
       if (!isAuto) Alert.alert("Error", "Could not set reminder.");
     }
   };
-  const performOfflineIdentification = async (uri: string) => {
-    const ocrResult = await extractOfflineOcrResult(uri);
-    if (ocrResult?.records && ocrResult.records.length > 0) {
-      const analysisResults = ocrResult.records.map((record) =>
-        mapOfflineRecordToAnalysis(
-          record,
-          ocrResult.identity,
-          ocrResult.recognizedText,
-        ),
-      );
-      setResults(analysisResults);
-      await saveScan(analysisResults, uri);
-      for (const med of analysisResults) {
-        await saveMedication(uri, med);
-      }
-      setShowOfflineSearchModal(false);
-      setInteractionReport(null);
-
-      // Interaction Check for offline multiple meds
-      if (analysisResults.length > 1) {
-        const report = await analyzeInteractions(analysisResults);
-        setInteractionReport(report);
-      }
-      return true;
-    } else {
-      const fileName = decodeURIComponent(uri.split("/").pop() || "")
-        .replace(/\.[a-z0-9]+$/i, "")
-        .replace(/[_-]+/g, " ")
-        .trim();
-      const localMatch = fileName ? findOfflineMedicineByName(fileName) : null;
-      if (localMatch) {
-        const analysisResults = [mapOfflineRecordToAnalysis(localMatch)];
-        setResults(analysisResults);
-        await saveScan(analysisResults, uri);
-        await saveMedication(uri, analysisResults[0]);
-        setShowOfflineSearchModal(false);
-        setInteractionReport(null);
-        return true;
-      }
-    }
-    return false;
-  };
-
   const identifyMedicine = async () => {
     if (!photo) return;
     setIsAnalyzing(true);
@@ -958,70 +935,85 @@ export default function Scanner() {
     try {
       const online = await isInternetAvailable();
       if (!online) {
-        const success = await performOfflineIdentification(photo);
-        if (!success) {
-          setShowOfflineSearchModal(true);
+        const ocrResult = await extractOfflineOcrResult(photo);
+        if (ocrResult?.records && ocrResult.records.length > 0) {
+          const analysisResults = ocrResult.records.map((record) =>
+            mapOfflineRecordToAnalysis(
+              record,
+              ocrResult.identity,
+              ocrResult.recognizedText,
+            ),
+          );
+          setResults(analysisResults);
+          persistAnalysisResults(analysisResults);
+          setShowOfflineSearchModal(false);
+          runInteractionAnalysis(analysisResults);
+        } else {
+          const fileName = decodeURIComponent(photo.split("/").pop() || "")
+            .replace(/\.[a-z0-9]+$/i, "")
+            .replace(/[_-]+/g, " ")
+            .trim();
+          const localMatch = fileName
+            ? findOfflineMedicineByName(fileName)
+            : null;
+          if (localMatch) {
+            const analysisResults = [mapOfflineRecordToAnalysis(localMatch)];
+            setResults(analysisResults);
+            persistAnalysisResults(analysisResults);
+            setShowOfflineSearchModal(false);
+            setInteractionReport(null);
+          } else {
+            setShowOfflineSearchModal(true);
+          }
         }
         return;
       }
-
       // 1. Identification
-      try {
-        const analysis = await analyzeMedicineImage(photo, scanMode);
-        setResults(analysis);
+      const analysis = await analyzeMedicineImage(photo, scanMode);
+      setResults(analysis);
 
-        if (
-          analysis.length === 1 &&
-          analysis[0]?.medicineName === "Offline Scan Mode"
-        ) {
-          const success = await performOfflineIdentification(photo);
-          if (!success) {
-            setShowOfflineSearchModal(true);
-          }
-          return;
-        }
-
-        await saveScan(analysis, photo);
-        // 1.5. Save to Medication Storage (for My Medications screen)
-        for (const medicine of analysis) {
-          try {
-            await saveMedication(photo, medicine);
-          } catch (err) {
-            console.error("Error saving to medication storage:", err);
-          }
-        }
-        // 2. Interaction Check (if > 1 med)
-        if (analysis.length > 1) {
-          const report = await analyzeInteractions(analysis);
-          setInteractionReport(report);
-        }
-        // 3. Auto-Schedule Reminders (Optional - maybe too aggressive for multi-meds)
-        if (analysis.length === 1 && analysis[0].recommendedTime) {
-          const [timeStr] = analysis[0].recommendedTime.split(" ");
-          const [h, m] = timeStr.split(":").map(Number);
-          if (!isNaN(h) && !isNaN(m)) {
-            setTimeout(
-              () => scheduleReminder(analysis[0].medicineName, h, m, true),
-              800,
-            );
-          }
-        }
-      } catch (innerErr) {
-        if (
-          innerErr instanceof Error &&
-          innerErr.message.includes("OFFLINE_MODE")
-        ) {
-          console.log("Online AI failed (quota/key), falling back to Local OCR");
-          const success = await performOfflineIdentification(photo);
-          if (!success) {
-            setShowOfflineSearchModal(true);
-          }
+      if (
+        analysis.length === 1 &&
+        analysis[0]?.medicineName === "Offline Scan Mode"
+      ) {
+        const ocrResult = await extractOfflineOcrResult(photo);
+        if (ocrResult?.records && ocrResult.records.length > 0) {
+          const analysisResults = ocrResult.records.map((record) =>
+            mapOfflineRecordToAnalysis(
+              record,
+              ocrResult.identity,
+              ocrResult.recognizedText,
+            ),
+          );
+          setResults(analysisResults);
+          persistAnalysisResults(analysisResults);
+          setShowOfflineSearchModal(false);
+          runInteractionAnalysis(analysisResults);
         } else {
-          throw innerErr;
+          setShowOfflineSearchModal(true);
+        }
+      }
+
+      persistAnalysisResults(analysis);
+      runInteractionAnalysis(analysis);
+      // 3. Auto-Schedule Reminders (Optional - maybe too aggressive for multi-meds)
+      // Only auto-schedule if single med found for now to avoid spam
+      if (analysis.length === 1 && analysis[0].recommendedTime) {
+        const [timeStr] = analysis[0].recommendedTime.split(" ");
+        const [h, m] = timeStr.split(":").map(Number);
+        if (!isNaN(h) && !isNaN(m)) {
+          setTimeout(
+            () => scheduleReminder(analysis[0].medicineName, h, m, true),
+            800,
+          );
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Analysis failed.");
+      if (err instanceof Error && err.message === "OFFLINE_MODE") {
+        setShowOfflineSearchModal(true);
+      } else {
+        setError(err instanceof Error ? err.message : "Analysis failed.");
+      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -1067,67 +1059,83 @@ export default function Scanner() {
           )}
           {/* Error State */}
           {error && !isAnalyzing && (
-            <View style={styles.bottomSheetContainer}>
-              <View style={styles.bottomSheetContent}>
-                <View style={styles.dragHandle} />
-                <Text style={styles.errorTitle}>Identification Failed</Text>
-                <Text style={styles.errorDesc}>{error}</Text>
-                <TouchableOpacity
-                  style={styles.primaryBtn}
-                  onPress={retakePhoto}
-                >
-                  <Text style={styles.primaryBtnText}>Try Again</Text>
-                </TouchableOpacity>
+            <Modal
+              transparent
+              visible
+              animationType="slide"
+              onRequestClose={retakePhoto}
+            >
+              <View style={styles.resultsModalOverlay}>
+                <View style={styles.bottomSheetContainer}>
+                  <View style={styles.bottomSheetContent}>
+                    <View style={styles.dragHandle} />
+                    <Text style={styles.errorTitle}>Identification Failed</Text>
+                    <Text style={styles.errorDesc}>{error}</Text>
+                    <TouchableOpacity
+                      style={styles.primaryBtn}
+                      onPress={retakePhoto}
+                    >
+                      <Text style={styles.primaryBtnText}>Try Again</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
               </View>
-            </View>
+            </Modal>
           )}
           {/* Success Results */}
           {results.length > 0 && !isAnalyzing && !error && (
-            <View style={styles.bottomSheetContainer}>
-              <View style={styles.bottomSheetContent}>
-                <View style={styles.dragHandle} />
-                {/* Sheet Header */}
-                <View style={styles.sheetTopRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.sheetTopTitle}>
-                      {results.length === 1
-                        ? "1 Medicine Found"
-                        : `${results.length} Medicines Found`}
-                    </Text>
-                    <Text style={styles.sheetTopSub}>
-                      Tap a card to view details
-                    </Text>
-                    <Text style={styles.sheetTopMeta}>
-                      Offline DB: {offlineCount.toLocaleString()} records
-                      {generatedOfflineCount > 0
-                        ? ` (${generatedOfflineCount.toLocaleString()} from Kaggle)`
-                        : " (using built-in records)"}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => setShowLangPicker(true)}
-                    style={styles.langChip}
-                  >
-                    <Text style={styles.langChipText}>
-                      {selectedLang.label.split(" ")[0]}
-                    </Text>
-                    <Ionicons
-                      name="chevron-down"
-                      size={12}
-                      color={Colors.primary}
-                    />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={retakePhoto}
-                    style={styles.sheetCloseBtn}
-                  >
-                    <Ionicons name="camera-outline" size={20} color="#64748B" />
-                  </TouchableOpacity>
-                </View>
-                <ScrollView
-                  style={styles.resultsScroll}
-                  showsVerticalScrollIndicator={false}
-                >
+            <Modal
+              transparent
+              visible
+              animationType="slide"
+              onRequestClose={retakePhoto}
+            >
+              <View style={styles.resultsModalOverlay}>
+                <View style={styles.bottomSheetContainer}>
+                  <View style={styles.bottomSheetContent}>
+                    <View style={styles.dragHandle} />
+                    {/* Sheet Header */}
+                    <View style={styles.sheetTopRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.sheetTopTitle}>
+                          {results.length === 1
+                            ? "1 Medicine Found"
+                            : `${results.length} Medicines Found`}
+                        </Text>
+                        <Text style={styles.sheetTopSub}>
+                          Tap a card to view details
+                        </Text>
+                        <Text style={styles.sheetTopMeta}>
+                          Offline DB: {offlineCount.toLocaleString()} records
+                          {generatedOfflineCount > 0
+                            ? ` (${generatedOfflineCount.toLocaleString()} from Kaggle)`
+                            : " (using built-in records)"}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => setShowLangPicker(true)}
+                        style={styles.langChip}
+                      >
+                        <Text style={styles.langChipText}>
+                          {selectedLang.label.split(" ")[0]}
+                        </Text>
+                        <Ionicons
+                          name="chevron-down"
+                          size={12}
+                          color={Colors.primary}
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={retakePhoto}
+                        style={styles.sheetCloseBtn}
+                      >
+                        <Ionicons name="camera-outline" size={20} color="#64748B" />
+                      </TouchableOpacity>
+                    </View>
+                    <ScrollView
+                      style={styles.resultsScroll}
+                      showsVerticalScrollIndicator={false}
+                    >
                   {/* INTERACTION ALERT BANNER */}
                   {interactionReport && interactionReport.hasConflict && (
                     <View
@@ -1528,7 +1536,7 @@ export default function Scanner() {
                             {Array.isArray(displayWarnings) ? (
                               displayWarnings.map((w, i) => (
                                 <Text key={i} style={styles.warningTextClean}>
-                                  · {w}
+                                  ┬╖ {w}
                                 </Text>
                               ))
                             ) : (
@@ -1601,7 +1609,7 @@ export default function Scanner() {
                                   </Text>
                                 )}
                                 <Text style={styles.pharmacyHint}>
-                                  Generika · TGP · Mercury Drug
+                                  Generika ┬╖ TGP ┬╖ Mercury Drug
                                 </Text>
                               </View>
                             )}
@@ -1658,10 +1666,12 @@ export default function Scanner() {
                       </View>
                     );
                   })}
-                  <View style={{ height: 40 }} />
-                </ScrollView>
+                      <View style={{ height: 40 }} />
+                    </ScrollView>
+                  </View>
+                </View>
               </View>
-            </View>
+            </Modal>
           )}
           {/* Pre-Analysis Actions */}
           {results.length === 0 && !error && !isAnalyzing && (
@@ -2421,11 +2431,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   // Results / Analysis Styles
+  resultsModalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(15,23,42,0.08)",
+  },
   bottomSheetContainer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
     backgroundColor: "#F8FAFC",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
@@ -2435,6 +2446,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 20,
     elevation: 24,
+    zIndex: 30,
+    overflow: "hidden",
   },
   bottomSheetContent: { flex: 1 },
   dragHandle: {
@@ -3182,3 +3195,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 });
+
+

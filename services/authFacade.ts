@@ -11,10 +11,8 @@ import {
   signOut,
   updateProfile,
 } from "firebase/auth";
-import { doc, getFirestore, setDoc } from "firebase/firestore";
-import { auth } from "./firebase";
-
-const db = getFirestore();
+import { doc, setDoc } from "firebase/firestore";
+import { auth, db } from "./firebase";
 
 /**
  * Initiates the sign-in flow

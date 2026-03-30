@@ -54,22 +54,6 @@ export default function LoginScreen() {
         Alert.alert("Account not found", "Sign up to create a new account.");
       else if (code === "invalid")
         Alert.alert("Wrong PIN", "Check your PIN and try again.");
-      else if (e?.message?.includes("blocked")) {
-        Alert.alert(
-            "Firebase Setup Required",
-            "Requests are blocked. Please enable 'Email/Password' in Firebase Console > Authentication > Sign-in method.",
-            [
-              { text: "I'll fix it", style: "cancel" },
-              { 
-                text: "Debug Login (Skip Auth)", 
-                onPress: async () => {
-                  await AsyncStorage.setItem("onboarding_done", "1");
-                  router.replace("/(tabs)");
-                }
-              }
-            ]
-          );
-      }
       else
         Alert.alert(
           "Error",
@@ -199,24 +183,17 @@ export default function LoginScreen() {
                 </LinearGradient>
               </TouchableOpacity>
 
-              {/* Dev Bypass Button */}
+              {/* Guest Login Button */}
               <TouchableOpacity
                 onPress={async () => {
                   await AsyncStorage.setItem("onboarding_done", "1");
                   router.replace("/(tabs)");
                 }}
-                style={{
-                  paddingVertical: verticalScale(12),
-                  alignItems: 'center',
-                  marginTop: verticalScale(10),
-                }}
+                style={[styles.secondaryBtn, { marginTop: verticalScale(10), backgroundColor: 'transparent', borderColor: Colors.primary }]}
               >
-                <Text style={{ color: Colors.primary, fontWeight: '600', fontSize: moderateScale(14) }}>
-                  Bypass Login (Developer Mode)
-                </Text>
+                <Text style={styles.secondaryText}>Continue as Guest</Text>
               </TouchableOpacity>
 
-              {/* Divider */}
               <View style={styles.dividerContainer}>
                 <View style={styles.divider} />
                 <Text style={styles.dividerText}>OR</Text>
@@ -373,5 +350,16 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: "700",
     fontSize: moderateScale(15),
+  },
+  guestBtn: {
+    paddingVertical: verticalScale(12),
+    alignItems: 'center',
+    marginBottom: verticalScale(10),
+  },
+  guestBtnText: {
+    color: Colors.textSecondary,
+    fontWeight: '600',
+    fontSize: moderateScale(14),
+    textDecorationLine: 'underline',
   },
 });

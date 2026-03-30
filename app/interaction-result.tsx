@@ -31,7 +31,7 @@ export default function InteractionResultScreen() {
         router.back();
       }
     }
-  }, [ids]);
+  }, [ids, router]);
   const loadData = async (selectedIds: string[]) => {
     setLoading(true);
     const allScans = await getRecentScans();

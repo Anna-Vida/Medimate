@@ -1,17 +1,61 @@
-import {
-    ExpoSpeechRecognitionModule,
-    useSpeechRecognitionEvent,
-} from "@jamsch/expo-speech-recognition";
+import Constants from "expo-constants";
 import * as Speech from "expo-speech";
+
+type SpeechRecognitionEventName = "start" | "end" | "result" | "error";
+
+type SpeechRecognitionListener = (event: any) => void;
+
+type SpeechRecognitionModuleShape = {
+  ExpoSpeechRecognitionModule: {
+    getStateAsync: () => Promise<any>;
+    requestPermissionsAsync: () => Promise<{ granted: boolean }>;
+    start: (options: Record<string, unknown>) => Promise<void>;
+    stop: () => Promise<void>;
+  };
+  useSpeechRecognitionEvent?: (
+    eventName: SpeechRecognitionEventName,
+    listener: SpeechRecognitionListener,
+  ) => void;
+};
+
+let cachedSpeechRecognitionModule: SpeechRecognitionModuleShape | null | undefined;
+
+function isExpoGo(): boolean {
+  return Constants.executionEnvironment === "storeClient";
+}
+
+function getSpeechRecognitionModule(): SpeechRecognitionModuleShape | null {
+  if (cachedSpeechRecognitionModule !== undefined) {
+    return cachedSpeechRecognitionModule;
+  }
+
+  if (isExpoGo()) {
+    cachedSpeechRecognitionModule = null;
+    return cachedSpeechRecognitionModule;
+  }
+
+  try {
+    cachedSpeechRecognitionModule =
+      require("@jamsch/expo-speech-recognition") as SpeechRecognitionModuleShape;
+  } catch {
+    cachedSpeechRecognitionModule = null;
+  }
+
+  return cachedSpeechRecognitionModule;
+}
 
 // Check if speech recognition is available
 export async function checkSpeechRecognitionAvailable(): Promise<boolean> {
+  const speechRecognition = getSpeechRecognitionModule();
+  if (!speechRecognition) {
+    return false;
+  }
+
   try {
-    const result = await ExpoSpeechRecognitionModule.getStateAsync();
-    // result can be a string state or object with isRecognitionAvailable
+    const result = await speechRecognition.ExpoSpeechRecognitionModule.getStateAsync();
     return typeof result === "object" && "isRecognitionAvailable" in result
       ? (result as any).isRecognitionAvailable
-      : true; // Assume available if state is just a string
+      : true;
   } catch {
     return false;
   }
@@ -19,8 +63,14 @@ export async function checkSpeechRecognitionAvailable(): Promise<boolean> {
 
 // Request microphone permission for speech recognition
 export async function requestSpeechPermission(): Promise<boolean> {
+  const speechRecognition = getSpeechRecognitionModule();
+  if (!speechRecognition) {
+    return false;
+  }
+
   try {
-    const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    const result =
+      await speechRecognition.ExpoSpeechRecognitionModule.requestPermissionsAsync();
     return result.granted;
   } catch {
     return false;
@@ -31,12 +81,17 @@ export async function requestSpeechPermission(): Promise<boolean> {
 export async function startListening(
   language: string = "en-US",
 ): Promise<void> {
+  const speechRecognition = getSpeechRecognitionModule();
+  if (!speechRecognition) {
+    throw new Error("SPEECH_RECOGNITION_UNAVAILABLE");
+  }
+
   try {
-    await ExpoSpeechRecognitionModule.start({
+    await speechRecognition.ExpoSpeechRecognitionModule.start({
       lang: language,
       interimResults: true,
       maxAlternatives: 1,
-      continuous: true, // Keep listening indefinitely
+      continuous: true,
       requiresOnDeviceRecognition: false,
       addsPunctuation: true,
     });
@@ -48,8 +103,13 @@ export async function startListening(
 
 // Stop listening
 export async function stopListening(): Promise<void> {
+  const speechRecognition = getSpeechRecognitionModule();
+  if (!speechRecognition) {
+    return;
+  }
+
   try {
-    await ExpoSpeechRecognitionModule.stop();
+    await speechRecognition.ExpoSpeechRecognitionModule.stop();
   } catch (error) {
     console.error("Failed to stop speech recognition:", error);
   }
@@ -63,7 +123,7 @@ export function speakText(
 ): void {
   Speech.speak(text, {
     language,
-    rate: 0.9, // Slightly slower for elders
+    rate: 0.9,
     onDone,
   });
 }
@@ -80,11 +140,10 @@ export function extractPersonFromSpeech(transcript: string): {
 } {
   const lowerTranscript = transcript.toLowerCase();
 
-  // Common introduction patterns
   const patterns = [
     /(?:i'm|i am|my name is|this is|call me|they call me)\s+(\w+)/i,
     /(?:i'm|i am)\s+(\w+)/i,
-    /^(\w+)(?:\s+here|\s+speaking)?$/i, // Just a name
+    /^(\w+)(?:\s+here|\s+speaking)?$/i,
   ];
 
   for (const pattern of patterns) {
@@ -92,7 +151,6 @@ export function extractPersonFromSpeech(transcript: string): {
     if (match && match[1]) {
       const name =
         match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase();
-      // Get details (everything after the name)
       const nameIndex = lowerTranscript.indexOf(match[1].toLowerCase());
       const details = transcript.slice(nameIndex + match[1].length).trim();
       return {
@@ -124,5 +182,14 @@ export function extractQueryFromSpeech(transcript: string): string | null {
   return null;
 }
 
-// Export the hook for use in components
-export { useSpeechRecognitionEvent };
+export function useSpeechRecognitionEvent(
+  eventName: SpeechRecognitionEventName,
+  listener: SpeechRecognitionListener,
+): void {
+  const speechRecognition = getSpeechRecognitionModule();
+  if (!speechRecognition?.useSpeechRecognitionEvent) {
+    return;
+  }
+
+  speechRecognition.useSpeechRecognitionEvent(eventName, listener);
+}

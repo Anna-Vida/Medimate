@@ -1,5 +1,4 @@
 {
-  "$schema": "./.vscode/schemas/expo-xdl.json",
   "expo": {
     "name": "MediMate",
     "slug": "MediMate",

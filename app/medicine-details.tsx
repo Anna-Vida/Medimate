@@ -1,6 +1,5 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import * as Notifications from "expo-notifications";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Speech from "expo-speech";
 import React, { useEffect, useMemo, useState } from "react";
@@ -32,6 +31,12 @@ import {
     getActiveMedications,
     updateMedicationInventory,
 } from "../services/medicationStorage";
+import {
+    areNotificationsSupported,
+    getReminderPermissionStatus,
+    requestReminderPermissions,
+    scheduleReminderNotification,
+} from "../services/notifications";
 import { SavedScan } from "../services/storage";
 import { moderateScale, scale, verticalScale } from "../utils/responsive";
 
@@ -192,11 +197,18 @@ export default function MedicineDetailsScreen() {
   };
 
   const handleSetReminder = async (medicine: MedicineAnalysis) => {
-    const { status } = await Notifications.getPermissionsAsync();
+    if (!areNotificationsSupported()) {
+      Alert.alert(
+        "Development Build Required",
+        "Medicine reminders are not available in Expo Go. Use a development build to test notifications.",
+      );
+      return;
+    }
+
+    const status = await getReminderPermissionStatus();
     if (status !== "granted") {
-      const { status: newStatus } =
-        await Notifications.requestPermissionsAsync();
-      if (newStatus !== "granted") {
+      const granted = await requestReminderPermissions();
+      if (!granted) {
         Alert.alert(
           "Permission Required",
           "Please enable notifications to set reminders.",
@@ -237,16 +249,11 @@ export default function MedicineDetailsScreen() {
       (scheduledTime.getTime() - now.getTime()) / 1000,
     );
 
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "Medicine Reminder",
-        body: `It's time to take your ${name}`,
-        data: { medicine: name },
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-        seconds: secondsUntil,
-      },
+    await scheduleReminderNotification({
+      title: "Medicine Reminder",
+      body: `It's time to take your ${name}`,
+      data: { medicine: name },
+      secondsUntil,
     });
 
     Alert.alert(
@@ -296,7 +303,7 @@ export default function MedicineDetailsScreen() {
       }));
       Alert.alert("Success", "Inventory tracked for " + med.medicineName);
       setShowInventorySheet(false);
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Failed to update inventory.");
     }
   };

@@ -4,7 +4,8 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
-    "start": "expo start",
+    "start": "set EXPO_NO_DEPENDENCY_VALIDATION=1&& expo start --go",
+    "start:dev": "set EXPO_NO_DEPENDENCY_VALIDATION=1&& expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
     "ios": "expo run:ios",

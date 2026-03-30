@@ -3,7 +3,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
-    Dimensions,
     StatusBar,
     StyleSheet,
     Text,
@@ -13,10 +12,8 @@ import {
 import Animated, {
     FadeIn,
     FadeInUp,
-    useSharedValue,
 } from "react-native-reanimated";
 import { Colors } from "../constants/Colors";
-const { width, height } = Dimensions.get("window");
 const ONBOARDING_KEY = "onboarding_done";
 const slides = [
   {
@@ -47,7 +44,6 @@ const slides = [
 export default function OnboardingScreen() {
   const router = useRouter();
   const [current, setCurrent] = useState(0);
-  const offsetX = useSharedValue(0);
   const slideRef = useRef(0);
   const handleNext = async () => {
     if (current < slides.length - 1) {

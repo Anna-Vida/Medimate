@@ -1,4 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { arrayUnion, doc, updateDoc } from "firebase/firestore";
+import { auth, db } from "./firebase";
 import { MedicineAnalysis } from "./gemini";
 import { getUserScopedKey } from "./userScopedStorage";
 
@@ -38,6 +40,32 @@ export interface DailySchedule {
 }
 
 /**
+ * Removes properties with `undefined` values from an object.
+ * Firestore does not allow `undefined` in array operations.
+ */
+function cleanUndefined(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(cleanUndefined);
+  }
+  if (typeof obj === 'object') {
+    const newObj: { [key: string]: any } = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        const value = obj[key];
+        if (value !== undefined) {
+          newObj[key] = cleanUndefined(value);
+        }
+      }
+    }
+    return newObj;
+  }
+  return obj;
+}
+
+/**
  * Save a new medication record
  */
 export async function saveMedication(
@@ -61,6 +89,28 @@ export async function saveMedication(
       getMedicationStorageKey(),
       JSON.stringify(medications),
     );
+
+    // Sync to Firestore if user is logged in
+    const user = auth.currentUser;
+    if (user) {
+      try {
+        const userDocRef = doc(db, "users", user.uid);
+        const cleanedRecord = cleanUndefined({
+          ...newRecord,
+          scanDate: newRecord.scanDate.toISOString(),
+          startDate: newRecord.startDate.toISOString(),
+        });
+
+        console.log("Syncing cleaned record to Firestore:", JSON.stringify(cleanedRecord, null, 2));
+
+        await updateDoc(userDocRef, {
+          medications: arrayUnion(cleanedRecord),
+        });
+        console.log("Medication synced to Firestore");
+      } catch (fsError) {
+        console.warn("Firestore sync failed:", fsError);
+      }
+    }
 
     return newRecord;
   } catch (error) {
@@ -221,10 +271,10 @@ export async function getTodaySchedule(): Promise<DailySchedule[]> {
  * Check for duplicate medications (same active ingredient)
  */
 export async function findDuplicateMedications(): Promise<
-  Array<{
+  {
     ingredient: string;
     medications: MedicationRecord[];
-  }>
+  }[]
 > {
   const activeMeds = await getActiveMedications();
   const byIngredient = new Map<string, MedicationRecord[]>();
@@ -237,10 +287,10 @@ export async function findDuplicateMedications(): Promise<
     byIngredient.get(ingredient)!.push(med);
   }
 
-  const duplicates: Array<{
+  const duplicates: {
     ingredient: string;
     medications: MedicationRecord[];
-  }> = [];
+  }[] = [];
 
   for (const [ingredient, meds] of byIngredient) {
     if (meds.length > 1) {

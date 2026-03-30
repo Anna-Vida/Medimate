@@ -74,12 +74,6 @@ export default function AddScheduleScreen() {
     }
   };
 
-  const formatDateDisplay = (dateStr: string) => {
-    if (!dateStr) return "—";
-    const d = new Date(dateStr);
-    return d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
-  };
-
   const handleSave = async () => {
     if (!medicineName.trim()) {
       Alert.alert("Missing Info", "Please enter the medicine name.");
