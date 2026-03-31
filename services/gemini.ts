@@ -148,7 +148,15 @@ function shouldFallbackToOffline(error: unknown): boolean {
     text.includes("404") ||
     text.includes("not found") ||
     text.includes("billing") ||
-    text.includes("insufficient_quota")
+    text.includes("insufficient_quota") ||
+    text.includes("offline_mode") ||
+    text.includes("ai_timeout") ||
+    text.includes("timeout") ||
+    text.includes("abort") ||
+    text.includes("network request failed") ||
+    text.includes("failed to fetch") ||
+    text.includes("network error") ||
+    text.includes("fetch")
   );
 }
 
@@ -558,15 +566,7 @@ Do NOT use Markdown code blocks. Just return the raw JSON ARRAY string.`;
     
     // Treat almost any online error as a reason to fall back to offline mode
     // to keep the app usable for the user.
-    const isOnlineError = 
-      String(error).includes("OFFLINE_MODE") || 
-      String(error).includes("401") || 
-      String(error).includes("403") || 
-      String(error).includes("404") || 
-      String(error).includes("quota") || 
-      String(error).includes("API key") ||
-      String(error).includes("timeout") ||
-      String(error).includes("fetch");
+    const isOnlineError = shouldFallbackToOffline(error);
 
     if (isOnlineError) {
       console.log("Online analysis failed, triggering offline fallback...");
@@ -579,16 +579,42 @@ Do NOT use Markdown code blocks. Just return the raw JSON ARRAY string.`;
 
       if (localMatch) {
         console.log(`Found offline match for: ${fileName}`);
+        const offlineInstructions = [
+          localMatch.howToTake,
+          localMatch.missedDoseAdvice
+            ? `Missed dose: ${localMatch.missedDoseAdvice}`
+            : "",
+          localMatch.whenToSeekHelp
+            ? `Seek help if: ${localMatch.whenToSeekHelp}`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+
+        const offlineWarnings = [
+          localMatch.warnings,
+          Array.isArray(localMatch.avoidWith) && localMatch.avoidWith.length > 0
+            ? `Avoid/Caution: ${localMatch.avoidWith.join(", ")}.`
+            : "",
+          Array.isArray(localMatch.importantNotes) &&
+          localMatch.importantNotes.length > 0
+            ? `Important notes: ${localMatch.importantNotes.join(" ")}`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+
         return [
           {
             medicineName: localMatch.name,
             activeIngredients: localMatch.genericName,
             commonUses: localMatch.commonUses,
             dosage: "Check label / prescription",
-            warnings: localMatch.warnings,
+            warnings: offlineWarnings,
             sideEffects: localMatch.sideEffects.join(", "),
             foodWarnings: [],
             simpleInstructions:
+              offlineInstructions ||
               "Offline match found from local dataset. Confirm dose with your prescription label.",
             affordability: {
               genericAlternative: localMatch.genericName,

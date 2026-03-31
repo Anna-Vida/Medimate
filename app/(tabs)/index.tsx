@@ -23,8 +23,9 @@ import Animated, {
     withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { HeaderIconButton } from "../../components/ui/header-icon-button";
 import * as AppTheme from "../../constants/Colors";
-import { Radius, Spacing } from "../../constants/ui";
+import { HeaderMetrics, Radius, Spacing } from "../../constants/ui";
 import { moderateScale, scale, verticalScale } from "../../utils/responsive";
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
@@ -199,7 +200,7 @@ export default function App() {
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Image 
               source={require("../../assets/images/MEDIMATE LOGO.png")}
-              style={{ width: scale(40), height: scale(40), marginRight: scale(10) }}
+              style={{ width: scale(HeaderMetrics.actionSize), height: scale(HeaderMetrics.actionSize), marginRight: scale(12) }}
               resizeMode="contain"
             />
             <View>
@@ -207,6 +208,11 @@ export default function App() {
               <Text style={styles.brandLabel}>MediMate</Text>
             </View>
           </View>
+          <HeaderIconButton
+            icon="person-outline"
+            onPress={() => router.push("/(tabs)/profile")}
+            style={styles.profileBtn}
+          />
         </Animated.View>
 
         <Animated.View
@@ -385,14 +391,14 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     backgroundColor: Colors.surface,
-    paddingBottom: verticalScale(18),
+    paddingBottom: verticalScale(HeaderMetrics.heroBottom),
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   header: {
-    paddingHorizontal: scale(16),
-    paddingTop: verticalScale(28),
-    paddingBottom: verticalScale(12),
+    paddingHorizontal: scale(HeaderMetrics.horizontal),
+    paddingTop: verticalScale(HeaderMetrics.heroTop),
+    paddingBottom: verticalScale(HeaderMetrics.regularVertical),
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -411,19 +417,15 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
   },
   profileBtn: {
-    width: scale(44),
-    height: scale(44),
-    borderRadius: 22,
-    backgroundColor: Colors.surfaceHighlight,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: Colors.border,
+    shadowColor: "#123458",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   statusRow: {
     flexDirection: "row",
-    paddingHorizontal: scale(16),
-    gap: scale(10),
+    paddingHorizontal: scale(HeaderMetrics.horizontal),
+    gap: scale(HeaderMetrics.contentGap),
   },
   statusPill: {
     flexDirection: "row",

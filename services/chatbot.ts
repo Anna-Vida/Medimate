@@ -54,8 +54,22 @@ function isQuotaIssue(error: unknown): boolean {
   );
 }
 
+function isNetworkIssue(error: unknown): boolean {
+  const text = String(error || "").toLowerCase();
+  return (
+    text.includes("offline_mode") ||
+    text.includes("chat_timeout") ||
+    text.includes("timeout") ||
+    text.includes("abort") ||
+    text.includes("network request failed") ||
+    text.includes("failed to fetch") ||
+    text.includes("network error") ||
+    text.includes("fetch")
+  );
+}
+
 function shouldUseOfflineFallback(error: unknown): boolean {
-  return isApiKeyIssue(error) || isQuotaIssue(error);
+  return isApiKeyIssue(error) || isQuotaIssue(error) || isNetworkIssue(error);
 }
 
 export interface ChatMessage {
@@ -63,8 +77,13 @@ export interface ChatMessage {
   content: string;
 }
 
+export type AssistantMode = "carebot" | "consultant";
+
 export interface ChatbotOptions {
   languageName?: string;
+  mode?: AssistantMode;
+  contextSummary?: string;
+  imageBase64?: string;
 }
 
 function sanitizeChatResponse(text: string): string {
@@ -76,7 +95,13 @@ function sanitizeChatResponse(text: string): string {
     .trim();
 }
 
-function buildPrompt(messages: ChatMessage[], languageName: string) {
+function buildPrompt(
+  messages: ChatMessage[],
+  languageName: string,
+  mode: AssistantMode,
+  contextSummary?: string,
+  hasImage?: boolean,
+) {
   const conversation = messages
     .map(
       (message) =>
@@ -84,18 +109,58 @@ function buildPrompt(messages: ChatMessage[], languageName: string) {
     )
     .join("\n");
 
+  const sharedRules = `
+General Rules:
+- Respond fully in ${languageName}.
+- Use a professional and respectful tone.
+- Do not use markdown, asterisks, bullet symbols, or emojis.
+- Never claim to replace a doctor.
+- If emergency symptoms are mentioned, advise urgent in-person care immediately.
+`;
+
+  const contextBlock = contextSummary
+    ? `Known medicine context from this user's app:
+${contextSummary}
+
+Use this context when it is relevant, but do not invent missing facts.
+`
+    : "";
+  const imageBlock = hasImage
+    ? `The user attached a medical image or check-up photo with the latest message.
+Use the image as evidence and explain what you can see, while stating any uncertainty clearly.
+`
+    : "";
+
+  if (mode === "consultant") {
+    return `You are ClarifyApp Virtual Consultant, an AI medication and care guidance assistant for Filipino users.
+${sharedRules}
+Consultant Rules:
+- Focus on medication use, side effects, interactions, reminders, scan results, and next-step guidance.
+- Do not diagnose diseases or prescribe new medicines.
+- Give practical, plain-language guidance.
+- If the user's question is uncertain, say what is known and what must be confirmed with a pharmacist or doctor.
+- Keep the answer under 220 words.
+- Structure the reply using these exact labels:
+Assessment:
+Guidance:
+Follow-up:
+Safety:
+
+${contextBlock}${imageBlock}Conversation:
+${conversation}
+
+Now answer the latest user message as the virtual consultant.`;
+  }
+
   return `You are ClarifyApp CareBot, a formal healthcare support assistant for Filipino users.
 Rules:
 - Give practical, concise answers in clear and simple English.
-- Use a professional and respectful tone.
-- Do not use markdown, asterisks, bullet symbols, or emojis.
 - If the request is medical, include a short safety note: emergency symptoms need immediate professional care.
-- Never claim to replace a doctor.
 - If users ask about medications, advise consulting pharmacist/doctor for dose changes.
 - Keep answer under 180 words.
-- Respond fully in ${languageName}.
+${sharedRules}
 
-Conversation:
+${contextBlock}${imageBlock}Conversation:
 ${conversation}
 
 Now answer the latest user message as the assistant.`;
@@ -107,6 +172,9 @@ export async function getChatbotReply(
 ): Promise<string> {
   const latest = messages[messages.length - 1]?.content || "";
   const languageName = options?.languageName || "English";
+  const mode = options?.mode || "carebot";
+  const contextSummary = options?.contextSummary;
+  const imageBase64 = options?.imageBase64;
 
   const online = await isInternetAvailable();
   if (!online) {
@@ -136,10 +204,26 @@ export async function getChatbotReply(
 
       for (const modelName of geminiModels) {
         try {
-          const prompt = buildPrompt(messages, languageName);
+          const prompt = buildPrompt(
+            messages,
+            languageName,
+            mode,
+            contextSummary,
+            !!imageBase64,
+          );
           const model = genAI.getGenerativeModel({ model: modelName });
           const result = await withTimeout(
-            model.generateContent(prompt),
+            imageBase64
+              ? model.generateContent([
+                  prompt,
+                  {
+                    inlineData: {
+                      data: imageBase64,
+                      mimeType: "image/jpeg",
+                    },
+                  },
+                ])
+              : model.generateContent(prompt),
             CHATBOT_TIMEOUT_MS,
           );
           return sanitizeChatResponse(result.response.text().trim());
@@ -150,12 +234,29 @@ export async function getChatbotReply(
 
       return sanitizeChatResponse(getOfflineChatbotReply(latest));
     }
+    const proxyPrompt =
+      buildPrompt(
+        messages,
+        languageName,
+        mode,
+        contextSummary,
+        !!imageBase64,
+      ) + `\n\nRaw conversation log:\n${languageScopedConversation}`;
     const text = await withTimeout(
-      callAiProxy({
-        task: "chatbot",
-        prompt: languageScopedConversation,
-        model: "gemini-2.5-flash",
-      }),
+      callAiProxy(
+        imageBase64
+          ? {
+              task: "generate",
+              prompt: proxyPrompt,
+              imageBase64,
+              model: "gemini-2.5-flash",
+            }
+          : {
+              task: "chatbot",
+              prompt: proxyPrompt,
+              model: "gemini-2.5-flash",
+            },
+      ),
       CHATBOT_TIMEOUT_MS,
     );
 

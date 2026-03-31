@@ -24,7 +24,9 @@ import Animated, {
     useSharedValue,
     withTiming,
 } from "react-native-reanimated";
+import { HeaderIconButton } from "../../components/ui/header-icon-button";
 import { Colors, Shadows } from "../../constants/Colors";
+import { HeaderMetrics } from "../../constants/ui";
 import { getCurrentUser } from "../../services/authFacade";
 import {
     clearCurrentUserScopedData,
@@ -75,9 +77,9 @@ const defaultProfile: UserProfile = {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#F8FAFC" },
   header: {
-    paddingTop: verticalScale(48),
-    paddingBottom: verticalScale(28),
-    paddingHorizontal: scale(20),
+    paddingTop: verticalScale(44),
+    paddingBottom: verticalScale(24),
+    paddingHorizontal: scale(HeaderMetrics.horizontal),
     backgroundColor: "#F8FAFC",
   },
   headerHero: {
@@ -111,8 +113,9 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: verticalScale(24),
+    alignItems: "flex-start",
+    gap: scale(HeaderMetrics.contentGap),
+    marginBottom: verticalScale(20),
   },
   headerBtn: {
     width: scale(40),
@@ -123,25 +126,34 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   editFloat: {
-    position: "absolute",
-    right: scale(20),
-    top: verticalScale(50),
-    width: scale(40),
-    height: scale(40),
-    borderRadius: 14,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
     shadowColor: "#000",
     shadowOpacity: 0.06,
     shadowRadius: 8,
     elevation: 3,
+    marginTop: verticalScale(2),
+  },
+  headerCopy: {
+    flex: 1,
+  },
+  headerEyebrow: {
+    fontSize: moderateScale(12),
+    fontWeight: "700",
+    color: Colors.primary,
+    letterSpacing: 0.6,
+    marginBottom: verticalScale(6),
   },
   headerTitle: {
-    fontSize: moderateScale(18),
-    fontWeight: "700",
+    fontSize: moderateScale(28),
+    fontWeight: "800",
     color: Colors.textPrimary,
-    letterSpacing: 0.3,
+    letterSpacing: -0.8,
+  },
+  headerSubtitle: {
+    marginTop: verticalScale(6),
+    fontSize: moderateScale(13),
+    fontWeight: "500",
+    color: Colors.textSecondary,
+    lineHeight: moderateScale(18),
   },
   avatarArea: { alignItems: "center" },
   avatarRing: {
@@ -812,20 +824,21 @@ export default function ProfileScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <Text style={styles.headerTitle}>Profile</Text>
-        </View>
-        <TouchableOpacity
-          onPress={isEditing ? saveProfile : () => setIsEditing(true)}
-          activeOpacity={0.7}
-          disabled={isSaving}
-          style={styles.editFloat}
-        >
-          <Ionicons
-            name={isEditing ? "checkmark" : "create-outline"}
-            size={20}
-            color={isEditing ? Colors.primary : Colors.primaryDark}
+          <View style={styles.headerCopy}>
+            <Text style={styles.headerEyebrow}>Account</Text>
+            <Text style={styles.headerTitle}>Profile</Text>
+            <Text style={styles.headerSubtitle}>
+              Manage your personal details, medical info, and preferences.
+            </Text>
+          </View>
+          <HeaderIconButton
+            icon={isEditing ? "checkmark" : "create-outline"}
+            onPress={isEditing ? saveProfile : () => setIsEditing(true)}
+            disabled={isSaving}
+            iconColor={isEditing ? Colors.primary : Colors.primaryDark}
+            style={styles.editFloat}
           />
-        </TouchableOpacity>
+        </View>
 
         <View style={styles.avatarArea}>
           <View style={{ position: "relative" }}>

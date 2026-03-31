@@ -1,15 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import {
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "../constants/Colors";
-import { Radius, Spacing } from "../constants/ui";
+import { HeaderMetrics, Spacing } from "../constants/ui";
+import {
+  HeaderIconButton,
+  HEADER_ICON_BUTTON_SIZE,
+} from "./ui/header-icon-button";
 
 interface AppHeaderProps {
   title: string;
@@ -35,18 +39,12 @@ export default function AppHeader({
         backgroundColor={Colors.primaryDark}
       />
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.sideButton}
+        <HeaderIconButton
+          icon={onBack ? "arrow-back" : undefined}
           onPress={onBack}
           disabled={!onBack}
-          activeOpacity={0.8}
-        >
-          {onBack ? (
-            <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
-          ) : (
-            <View style={styles.emptySide} />
-          )}
-        </TouchableOpacity>
+          variant="dark"
+        />
 
         <View style={styles.center}>
           <Text style={styles.title} numberOfLines={1}>
@@ -59,20 +57,26 @@ export default function AppHeader({
           )}
         </View>
 
-        <TouchableOpacity
-          style={styles.sideButton}
-          onPress={onRightPress}
-          disabled={!onRightPress}
-          activeOpacity={0.8}
-        >
+        <View style={styles.rightButton}>
           {rightIcon ? (
-            <Ionicons name={rightIcon} size={19} color="#FFFFFF" />
+            <HeaderIconButton
+              icon={rightIcon}
+              onPress={onRightPress}
+              disabled={!onRightPress}
+              variant="dark"
+            />
           ) : rightLabel ? (
-            <Text style={styles.rightLabel}>{rightLabel}</Text>
+            <TouchableOpacity
+              onPress={onRightPress}
+              disabled={!onRightPress}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.rightLabel}>{rightLabel}</Text>
+            </TouchableOpacity>
           ) : (
             <View style={styles.emptySide} />
           )}
-        </TouchableOpacity>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -84,44 +88,52 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: Colors.primaryDark,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xs,
-    paddingBottom: Spacing.sm,
+    paddingHorizontal: HeaderMetrics.horizontal,
+    paddingTop: HeaderMetrics.compactTop,
+    paddingBottom: HeaderMetrics.regularVertical,
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.sm,
+    gap: HeaderMetrics.contentGap,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.12)",
   },
-  sideButton: {
-    width: 34,
-    height: 34,
-    borderRadius: Radius.sm,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.16)",
-  },
   emptySide: {
-    width: 16,
-    height: 16,
+    width: HEADER_ICON_BUTTON_SIZE,
+    height: HEADER_ICON_BUTTON_SIZE,
   },
   center: {
     flex: 1,
   },
   title: {
     color: "#FFFFFF",
-    fontSize: 17,
+    fontSize: HeaderMetrics.titleSize,
     fontWeight: "800",
   },
   subtitle: {
     color: "rgba(255,255,255,0.82)",
-    fontSize: 11,
-    marginTop: 1,
+    fontSize: HeaderMetrics.subtitleSize,
+    marginTop: 2,
+  },
+  rightButton: {
+    minWidth: HEADER_ICON_BUTTON_SIZE,
+    minHeight: HEADER_ICON_BUTTON_SIZE,
+    alignItems: "center",
+    justifyContent: "center",
   },
   rightLabel: {
     color: "#FFFFFF",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "700",
     letterSpacing: 0.3,
+    minHeight: HEADER_ICON_BUTTON_SIZE,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    borderRadius: HeaderMetrics.actionRadius,
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    textAlign: "center",
+    textAlignVertical: "center",
   },
 });

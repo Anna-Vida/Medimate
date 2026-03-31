@@ -16,6 +16,19 @@ export const Radius = {
   xxl: 24,
 } as const;
 
+export const HeaderMetrics = {
+  horizontal: 16,
+  compactTop: 8,
+  regularVertical: 12,
+  heroTop: 24,
+  heroBottom: 18,
+  contentGap: 12,
+  titleSize: 18,
+  subtitleSize: 12,
+  actionSize: 42,
+  actionRadius: 14,
+} as const;
+
 export const Elevation = {
   card: {
     shadowColor: "#0E243B",

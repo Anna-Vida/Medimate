@@ -1,13 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
+  Platform,
   SafeAreaView,
   ScrollView,
   StatusBar,
@@ -15,29 +14,61 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { Colors } from "../../constants/Colors";
+import { HeaderMetrics } from "../../constants/ui";
 import { getCurrentUser, signInFlow } from "../../services/authFacade";
 import { syncIdentityToProfile } from "../../services/userProfile";
 import { moderateScale, scale, verticalScale } from "../../utils/responsive";
+
+type BannerState = {
+  tone: "error" | "success" | "info" | "warning";
+  title: string;
+  message: string;
+};
+
+const AUTH_ACCENT = Colors.primary;
+const AUTH_ACCENT_TEXT = Colors.white;
+const BORDER_COLOR = "#D8DCE2";
+const MUTED_TEXT = "#67707C";
+const WARNING_BG = "#FFF8E8";
+const WARNING_BORDER = "#E7D1A1";
+const WARNING_ICON_BG = "#FDE7B0";
+const WARNING_ICON = "#9D6B08";
+const SUCCESS_BG = "#EEF8F2";
+const SUCCESS_BORDER = "#BFE0CA";
+const SUCCESS_ICON_BG = "#D8EFDF";
 
 export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [pin, setPin] = useState("");
+  const [showPin, setShowPin] = useState(false);
   const [loading, setLoading] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [pinFocused, setPinFocused] = useState(false);
+  const [banner, setBanner] = useState<BannerState | null>(null);
+
+  const resolveAuthCode = (error: any) => {
+    const code = String(error?.code || error?.message || "").toLowerCase();
+    return code;
+  };
 
   const handleLogin = async () => {
     if (!email || !pin) {
-      Alert.alert("Missing info", "Enter email and PIN");
+      setBanner({
+        tone: "error",
+        title: "Missing information",
+        message: "Enter your email address and PIN to continue.",
+      });
       return;
     }
+
     try {
       setLoading(true);
+      setBanner(null);
       await signInFlow(email.trim(), pin.trim());
       await AsyncStorage.setItem("onboarding_done", "1");
       const authUser = getCurrentUser();
@@ -45,172 +76,207 @@ export default function LoginScreen() {
         email: authUser?.email || email.trim(),
         fullName: authUser?.displayName,
       });
-
       router.replace("/(tabs)");
     } catch (e: any) {
-      const code = e?.message;
-      console.error("Login error details:", e);
-      if (code === "not_found")
-        Alert.alert("Account not found", "Sign up to create a new account.");
-      else if (code === "invalid")
-        Alert.alert("Wrong PIN", "Check your PIN and try again.");
-      else
-        Alert.alert(
-          "Error",
-          "Could not sign in. Check your email and PIN, or try resetting your password.",
-        );
+      const code = resolveAuthCode(e);
+
+      if (code.includes("not_found")) {
+        setBanner({
+          tone: "warning",
+          title: "Account not found",
+          message: "No account matched that email. Create one to continue.",
+        });
+      } else if (
+        code.includes("invalid") ||
+        code.includes("invalid-credential")
+      ) {
+        setBanner({
+          tone: "warning",
+          title: "Incorrect login details",
+          message: "Check your email and PIN, then try again.",
+        });
+      } else {
+        console.warn("Login issue:", e);
+        setBanner({
+          tone: "error",
+          title: "Sign in failed",
+          message: "Could not sign in right now. Please try again.",
+        });
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }}>
-      <StatusBar barStyle="dark-content" />
-      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+    <SafeAreaView style={styles.screen}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.flex}
+      >
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
-          scrollEnabled={false}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          {/* Header Section */}
-          <LinearGradient
-            colors={[Colors.primary, Colors.primaryDark]}
-            style={styles.headerGradient}
-          >
-            <Animated.View entering={FadeInDown.duration(600)}>
-              <View style={styles.logoContainer}>
-                <Image 
-                  source={require("../../assets/images/MEDIMATE LOGO.png")}
-                  style={{ width: scale(120), height: scale(120), marginBottom: verticalScale(10) }}
-                  resizeMode="contain"
+          <View style={styles.backgroundAccentTop} />
+          <View style={styles.backgroundAccentBottom} />
+
+          <Animated.View entering={FadeInDown.duration(300)} style={styles.header}>
+            <View style={styles.brandRow}>
+              <Image
+                source={require("../../assets/images/MEDIMATE LOGO.png")}
+                style={styles.logo}
+                resizeMode="contain"
+              />
+              <Text style={styles.brandText}>MediMate</Text>
+            </View>
+            <Text style={styles.pageTitle}>Login account</Text>
+            <Text style={styles.pageSubtitle}>Welcome back!</Text>
+          </Animated.View>
+
+          <Animated.View entering={FadeInUp.duration(320).delay(40)} style={styles.formArea}>
+            {banner ? (
+              <View
+                style={[
+                  styles.banner,
+                  banner.tone === "error" && styles.bannerError,
+                  banner.tone === "warning" && styles.bannerWarning,
+                  banner.tone === "success" && styles.bannerSuccess,
+                  banner.tone === "info" && styles.bannerInfo,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.bannerIconWrap,
+                    banner.tone === "success"
+                      ? styles.bannerIconWrapSuccess
+                      : styles.bannerIconWrapWarning,
+                  ]}
+                >
+                  <Ionicons
+                    name={
+                      banner.tone === "success"
+                        ? "checkmark"
+                        : "warning-outline"
+                    }
+                    size={16}
+                    color={
+                      banner.tone === "success" ? Colors.success : WARNING_ICON
+                    }
+                    style={styles.bannerIcon}
+                  />
+                </View>
+                <View style={styles.bannerText}>
+                  <Text style={styles.bannerTitle}>{banner.title}</Text>
+                  <Text style={styles.bannerMessage}>{banner.message}</Text>
+                </View>
+              </View>
+            ) : null}
+
+            <View style={styles.field}>
+              <Text style={styles.label}>Email</Text>
+              <View
+                style={[
+                  styles.inputShell,
+                  emailFocused && styles.inputShellFocused,
+                ]}
+              >
+                <Ionicons
+                  name="mail-outline"
+                  size={18}
+                  color={emailFocused ? Colors.primary : "#8A94A3"}
+                  style={styles.inputIcon}
                 />
-                <Text style={styles.appName}>MediMate</Text>
-                <Text style={styles.tagline}>Your Health Companion</Text>
+                <TextInput
+                  style={styles.input}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  placeholder="example@gmail.com"
+                  placeholderTextColor="#97A0AC"
+                  value={email}
+                  onChangeText={setEmail}
+                  onFocus={() => setEmailFocused(true)}
+                  onBlur={() => setEmailFocused(false)}
+                />
               </View>
-            </Animated.View>
-          </LinearGradient>
+            </View>
 
-          {/* Form Section */}
-          <View style={styles.formContainer}>
-            <Animated.View entering={FadeInUp.duration(600).delay(200)}>
-              <Text style={styles.welcomeTitle}>Welcome Back</Text>
-              <Text style={styles.welcomeSubtitle}>
-                Sign in to continue managing your health
-              </Text>
-
-              {/* Email Input */}
-              <View style={styles.inputGroupContainer}>
-                <Text style={styles.label}>Email Address</Text>
-                <View
-                  style={[
-                    styles.inputWrapper,
-                    emailFocused && styles.inputWrapperFocused,
-                  ]}
+            <View style={styles.field}>
+              <Text style={styles.label}>PIN</Text>
+              <View
+                style={[
+                  styles.inputShell,
+                  pinFocused && styles.inputShellFocused,
+                ]}
+              >
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={18}
+                  color={pinFocused ? Colors.primary : "#8A94A3"}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  secureTextEntry={!showPin}
+                  keyboardType="number-pad"
+                  placeholder="Enter your PIN"
+                  placeholderTextColor="#97A0AC"
+                  value={pin}
+                  onChangeText={setPin}
+                  onFocus={() => setPinFocused(true)}
+                  onBlur={() => setPinFocused(false)}
+                  maxLength={6}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPin((current) => !current)}
+                  style={styles.trailingButton}
+                  activeOpacity={0.8}
                 >
                   <Ionicons
-                    name="mail"
+                    name={showPin ? "eye-off-outline" : "eye-outline"}
                     size={18}
-                    color={emailFocused ? Colors.primary : Colors.textSecondary}
-                    style={{ marginRight: scale(10) }}
+                    color={Colors.primaryLight}
                   />
-                  <TextInput
-                    style={styles.input}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    placeholder="your@email.com"
-                    placeholderTextColor={Colors.textTertiary}
-                    value={email}
-                    onChangeText={setEmail}
-                    onFocus={() => setEmailFocused(true)}
-                    onBlur={() => setEmailFocused(false)}
-                  />
-                </View>
+                </TouchableOpacity>
               </View>
+            </View>
 
-              {/* PIN Input */}
-              <View style={styles.inputGroupContainer}>
-                <Text style={styles.label}>Security PIN</Text>
-                <View
-                  style={[
-                    styles.inputWrapper,
-                    pinFocused && styles.inputWrapperFocused,
-                  ]}
-                >
-                  <Ionicons
-                    name="lock-closed"
-                    size={18}
-                    color={pinFocused ? Colors.primary : Colors.textSecondary}
-                    style={{ marginRight: scale(10) }}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    secureTextEntry
-                    keyboardType="number-pad"
-                    placeholder="••••"
-                    placeholderTextColor={Colors.textTertiary}
-                    value={pin}
-                    onChangeText={setPin}
-                    onFocus={() => setPinFocused(true)}
-                    onBlur={() => setPinFocused(false)}
-                    maxLength={6}
-                  />
-                </View>
-              </View>
+            <TouchableOpacity
+              onPress={handleLogin}
+              activeOpacity={0.9}
+              disabled={loading}
+              style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}
+            >
+              {loading ? (
+                <ActivityIndicator color={AUTH_ACCENT_TEXT} />
+              ) : (
+                <Text style={styles.primaryButtonText}>Login</Text>
+              )}
+            </TouchableOpacity>
 
-              {/* Sign In Button */}
+            <TouchableOpacity
+              onPress={async () => {
+                await AsyncStorage.setItem("onboarding_done", "1");
+                router.replace("/(tabs)");
+              }}
+              activeOpacity={0.85}
+              style={styles.secondaryButton}
+            >
+              <Text style={styles.secondaryButtonText}>Continue as guest</Text>
+            </TouchableOpacity>
+
+            <View style={styles.footerRow}>
+              <Text style={styles.footerText}>{"Don't have an account?"}</Text>
               <TouchableOpacity
-                onPress={handleLogin}
-                activeOpacity={0.8}
-                disabled={loading}
-                style={[styles.primaryBtn, loading && styles.primaryBtnDisabled]}
-              >
-                <LinearGradient
-                  colors={[Colors.primary, Colors.primaryDark]}
-                  style={styles.gradientBtn}
-                >
-                  {loading ? (
-                    <ActivityIndicator color={Colors.white} />
-                  ) : (
-                    <>
-                      <Text style={styles.primaryText}>Sign In</Text>
-                      <Ionicons
-                        name="arrow-forward"
-                        size={18}
-                        color={Colors.white}
-                      />
-                    </>
-                  )}
-                </LinearGradient>
-              </TouchableOpacity>
-
-              {/* Guest Login Button */}
-              <TouchableOpacity
-                onPress={async () => {
-                  await AsyncStorage.setItem("onboarding_done", "1");
-                  router.replace("/(tabs)");
-                }}
-                style={[styles.secondaryBtn, { marginTop: verticalScale(10), backgroundColor: 'transparent', borderColor: Colors.primary }]}
-              >
-                <Text style={styles.secondaryText}>Continue as Guest</Text>
-              </TouchableOpacity>
-
-              <View style={styles.dividerContainer}>
-                <View style={styles.divider} />
-                <Text style={styles.dividerText}>OR</Text>
-                <View style={styles.divider} />
-              </View>
-
-              {/* Sign Up Button */}
-              <TouchableOpacity
-                style={styles.secondaryBtn}
                 onPress={() => router.push("/auth/signup")}
                 activeOpacity={0.85}
               >
-                <Ionicons name="person-add" size={18} color={Colors.primary} />
-                <Text style={styles.secondaryText}>Create an Account</Text>
+                <Text style={styles.footerLink}>Sign up</Text>
               </TouchableOpacity>
-            </Animated.View>
-          </View>
+            </View>
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -218,148 +284,206 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerGradient: {
-    paddingVertical: verticalScale(40),
-    paddingHorizontal: scale(24),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  logoContainer: {
-    alignItems: "center",
-  },
-  logoBg: {
-    width: scale(80),
-    height: scale(80),
-    borderRadius: 24,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: verticalScale(16),
-    borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.3)",
-  },
-  appName: {
-    fontSize: moderateScale(28),
-    fontWeight: "900",
-    color: Colors.white,
-    letterSpacing: -0.5,
-  },
-  tagline: {
-    fontSize: moderateScale(13),
-    color: "rgba(255, 255, 255, 0.8)",
-    marginTop: verticalScale(4),
-    fontWeight: "500",
-  },
-  formContainer: {
+  flex: {
     flex: 1,
-    paddingHorizontal: scale(24),
-    paddingVertical: verticalScale(32),
-    justifyContent: "center",
   },
-  welcomeTitle: {
-    fontSize: moderateScale(26),
-    fontWeight: "800",
-    color: Colors.textPrimary,
-    marginBottom: verticalScale(6),
+  screen: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
   },
-  welcomeSubtitle: {
-    fontSize: moderateScale(14),
-    color: Colors.textSecondary,
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: scale(HeaderMetrics.horizontal),
+    paddingTop: verticalScale(HeaderMetrics.regularVertical),
+    paddingBottom: verticalScale(28),
+  },
+  backgroundAccentTop: {
+    position: "absolute",
+    top: verticalScale(-82),
+    right: scale(-50),
+    width: scale(220),
+    height: scale(220),
+    borderRadius: 999,
+    backgroundColor: "rgba(74, 124, 167, 0.14)",
+  },
+  backgroundAccentBottom: {
+    position: "absolute",
+    bottom: verticalScale(-90),
+    left: scale(-60),
+    width: scale(200),
+    height: scale(200),
+    borderRadius: 999,
+    backgroundColor: "rgba(18, 52, 88, 0.08)",
+  },
+  header: {
+    paddingTop: verticalScale(24),
     marginBottom: verticalScale(28),
-    lineHeight: 20,
   },
-  inputGroupContainer: {
-    marginBottom: verticalScale(20),
-  },
-  label: {
-    fontSize: moderateScale(12),
-    fontWeight: "700",
-    color: Colors.textSecondary,
-    marginBottom: verticalScale(8),
-    letterSpacing: 0.5,
-  },
-  inputWrapper: {
+  brandRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    paddingHorizontal: scale(14),
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    height: verticalScale(48),
+    gap: scale(10),
+    marginBottom: verticalScale(20),
   },
-  inputWrapperFocused: {
-    borderColor: Colors.primary,
-    backgroundColor: "rgba(59, 130, 246, 0.05)",
+  logo: {
+    width: scale(34),
+    height: scale(34),
+  },
+  brandText: {
+    fontSize: moderateScale(15),
+    fontWeight: "800",
+    color: "#171717",
+    letterSpacing: -0.2,
+  },
+  pageTitle: {
+    fontSize: moderateScale(31),
+    fontWeight: "800",
+    color: "#111111",
+    letterSpacing: -0.9,
+  },
+  pageSubtitle: {
+    marginTop: verticalScale(8),
+    fontSize: moderateScale(15),
+    color: MUTED_TEXT,
+  },
+  formArea: {
+    width: "100%",
+  },
+  banner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: scale(14),
+    paddingVertical: verticalScale(13),
+    marginBottom: verticalScale(20),
+  },
+  bannerError: {
+    backgroundColor: WARNING_BG,
+    borderColor: WARNING_BORDER,
+  },
+  bannerWarning: {
+    backgroundColor: WARNING_BG,
+    borderColor: WARNING_BORDER,
+  },
+  bannerSuccess: {
+    backgroundColor: SUCCESS_BG,
+    borderColor: SUCCESS_BORDER,
+  },
+  bannerInfo: {
+    backgroundColor: WARNING_BG,
+    borderColor: WARNING_BORDER,
+  },
+  bannerIconWrap: {
+    width: scale(28),
+    height: scale(28),
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: scale(10),
+    marginTop: verticalScale(1),
+  },
+  bannerIconWrapWarning: {
+    backgroundColor: WARNING_ICON_BG,
+  },
+  bannerIconWrapSuccess: {
+    backgroundColor: SUCCESS_ICON_BG,
+  },
+  bannerIcon: {
+  },
+  bannerText: {
+    flex: 1,
+  },
+  bannerTitle: {
+    fontSize: moderateScale(13),
+    fontWeight: "700",
+    color: "#2B2F36",
+    marginBottom: verticalScale(3),
+  },
+  bannerMessage: {
+    fontSize: moderateScale(12.5),
+    color: "#5F6772",
+    lineHeight: 19,
+  },
+  field: {
+    marginBottom: verticalScale(18),
+  },
+  label: {
+    marginBottom: verticalScale(9),
+    fontSize: moderateScale(13),
+    fontWeight: "600",
+    color: "#202733",
+  },
+  inputShell: {
+    minHeight: verticalScale(56),
+    borderWidth: 1,
+    borderColor: BORDER_COLOR,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: scale(14),
+  },
+  inputShellFocused: {
+    borderColor: Colors.primaryLight,
+  },
+  inputIcon: {
+    marginRight: scale(10),
+  },
+  trailingButton: {
+    paddingLeft: scale(10),
+    paddingVertical: verticalScale(4),
   },
   input: {
     flex: 1,
-    fontSize: moderateScale(15),
-    color: Colors.textPrimary,
-    fontWeight: "500",
-  },
-  primaryBtn: {
-    marginTop: verticalScale(8),
-    marginBottom: verticalScale(24),
-    borderRadius: 14,
-    overflow: "hidden",
-  },
-  gradientBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: verticalScale(14),
-    gap: scale(8),
-  },
-  primaryBtnDisabled: {
-    opacity: 0.6,
-  },
-  primaryText: {
-    color: "#FFF",
-    fontWeight: "800",
-    fontSize: moderateScale(15),
-  },
-  dividerContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: verticalScale(20),
-  },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-  dividerText: {
-    marginHorizontal: scale(12),
-    color: Colors.textSecondary,
-    fontSize: moderateScale(12),
-    fontWeight: "600",
-  },
-  secondaryBtn: {
-    flexDirection: "row",
-    backgroundColor: Colors.surfaceHighlight,
-    borderRadius: 14,
-    paddingVertical: verticalScale(14),
-    alignItems: "center",
-    justifyContent: "center",
-    gap: scale(8),
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-  },
-  secondaryText: {
-    color: Colors.primary,
-    fontWeight: "700",
-    fontSize: moderateScale(15),
-  },
-  guestBtn: {
-    paddingVertical: verticalScale(12),
-    alignItems: 'center',
-    marginBottom: verticalScale(10),
-  },
-  guestBtnText: {
-    color: Colors.textSecondary,
-    fontWeight: '600',
     fontSize: moderateScale(14),
-    textDecorationLine: 'underline',
+    color: "#111111",
+  },
+  primaryButton: {
+    minHeight: verticalScale(56),
+    borderRadius: 16,
+    backgroundColor: AUTH_ACCENT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: verticalScale(10),
+  },
+  primaryButtonDisabled: {
+    opacity: 0.7,
+  },
+  primaryButtonText: {
+    fontSize: moderateScale(15),
+    fontWeight: "800",
+    color: AUTH_ACCENT_TEXT,
+  },
+  secondaryButton: {
+    minHeight: verticalScale(56),
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER_COLOR,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: verticalScale(12),
+  },
+  secondaryButtonText: {
+    fontSize: moderateScale(14),
+    fontWeight: "600",
+    color: Colors.primary,
+  },
+  footerRow: {
+    marginTop: verticalScale(24),
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: scale(6),
+  },
+  footerText: {
+    fontSize: moderateScale(13),
+    color: MUTED_TEXT,
+  },
+  footerLink: {
+    fontSize: moderateScale(13),
+    fontWeight: "800",
+    color: Colors.primary,
   },
 });

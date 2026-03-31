@@ -4,10 +4,16 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
+    "postinstall": "node ./scripts/apply-expo-cli-fix.js",
     "start": "set EXPO_NO_DEPENDENCY_VALIDATION=1&& expo start --go",
     "start:dev": "set EXPO_NO_DEPENDENCY_VALIDATION=1&& expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
+    "android:standalone": "cd android && .\\gradlew assembleRelease",
+    "android:install-release": "cd android && .\\gradlew installRelease",
+    "build:android:apk": "npx eas-cli build --platform android --profile preview",
+    "build:android:aab": "npx eas-cli build --platform android --profile production",
+    "build:ios": "npx eas-cli build --platform ios --profile production",
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint"

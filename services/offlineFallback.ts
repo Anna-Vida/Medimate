@@ -3,6 +3,58 @@ import {
     OfflineMedicineRecord,
 } from "./offlineMedicineData";
 
+function formatOfflineList(label: string, items?: string[]): string {
+  if (!items || items.length === 0) return "";
+  return `${label}: ${items.join(", ")}`;
+}
+
+function buildOfflineMedicineSummary(medicine: OfflineMedicineRecord): string {
+  const lines = [
+    `Offline mode: **${medicine.name}** (${medicine.genericName})`,
+    `Uses: ${medicine.commonUses}`,
+  ];
+
+  if (medicine.howToTake) {
+    lines.push(`How to take: ${medicine.howToTake}`);
+  }
+
+  const avoidWith = formatOfflineList("Avoid/Caution", medicine.avoidWith);
+  if (avoidWith) {
+    lines.push(avoidWith);
+  }
+
+  lines.push(`Warning: ${medicine.warnings}`);
+
+  const sideEffects = formatOfflineList("Side effects", medicine.sideEffects);
+  if (sideEffects) {
+    lines.push(sideEffects);
+  }
+
+  const importantNotes = formatOfflineList(
+    "Important notes",
+    medicine.importantNotes,
+  );
+  if (importantNotes) {
+    lines.push(importantNotes);
+  }
+
+  if (medicine.missedDoseAdvice) {
+    lines.push(`Missed dose: ${medicine.missedDoseAdvice}`);
+  }
+
+  if (medicine.whenToSeekHelp) {
+    lines.push(`Seek help now if: ${medicine.whenToSeekHelp}`);
+  }
+
+  if (medicine.storage) {
+    lines.push(`Storage: ${medicine.storage}`);
+  }
+
+  lines.push(`Price: ${medicine.estimatedPrice}`);
+
+  return lines.join("\n\n");
+}
+
 function norm(value: string): string {
   return value
     .trim()
@@ -331,11 +383,7 @@ export function getOfflineChatbotReply(message: string): string {
   for (const candidate of candidates) {
     const matched = findOfflineMedicineByName(candidate);
     if (matched) {
-      // Return a comprehensive info card if matched directly
-      return `Offline mode: **${matched.name}** (${matched.genericName})\n` +
-             `Uses: ${matched.commonUses}\n` +
-             `Price: ${matched.estimatedPrice}\n` +
-             `Warning: ${matched.warnings}`;
+      return buildOfflineMedicineSummary(matched);
     }
   }
 
@@ -387,7 +435,8 @@ export function getOfflineChatbotReply(message: string): string {
     for (const candidate of extractMedicineCandidates(message)) {
       const matched = findOfflineMedicineByName(candidate);
       if (matched) {
-        return `Offline mode: ${matched.name} estimated price is ${matched.estimatedPrice}. Note: Prices vary by pharmacy and generic brands are usually cheaper.`;
+        const notes = formatOfflineList("Important notes", matched.importantNotes);
+        return `Offline mode: ${matched.name} estimated price is ${matched.estimatedPrice}. Note: Prices vary by pharmacy and generic brands are usually cheaper.${notes ? `\n\n${notes}` : ""}`;
       }
     }
     return "Offline mode: I can't find the price for that specific medicine. In general, generic medicines in the Philippines are 50-90% cheaper than branded ones.";
@@ -409,7 +458,7 @@ export function getOfflineChatbotReply(message: string): string {
     for (const candidate of extractMedicineCandidates(message)) {
       const matched = findOfflineMedicineByName(candidate);
       if (matched) {
-        return `Offline mode: ${matched.name} is commonly used for ${matched.commonUses}. \n\nWarning: ${matched.warnings}. \n\nSide effects: ${matched.sideEffects.join(", ")}.`;
+        return buildOfflineMedicineSummary(matched);
       }
     }
   }

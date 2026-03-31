@@ -1,14 +1,15 @@
 {
   "expo": {
     "name": "MediMate",
-    "slug": "MediMate",
+    "slug": "medimate",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/MEDIMATE LOGO.png",
+    "icon": "./assets/images/app-icon.png",
     "scheme": "medimate",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.medimate",
       "infoPlist": {
         "NSSpeechRecognitionUsageDescription": "Allow MediMate to use speech recognition to understand what you say.",
         "NSMicrophoneUsageDescription": "Allow MediMate to use the microphone to hear you."
@@ -16,12 +17,12 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#FFFFFF",
-        "foregroundImage": "./assets/images/MEDIMATE LOGO.png",
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.MediMate",
+      "package": "com.anonymous.medimate",
       "permissions": [
         "NOTIFICATIONS",
         "SCHEDULE_EXACT_ALARM",
@@ -53,12 +54,12 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/MEDIMATE LOGO.png",
-          "imageWidth": 200,
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 170,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#F4F8FC",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#F4F8FC"
           }
         }
       ],

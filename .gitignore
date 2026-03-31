@@ -39,6 +39,10 @@ nul
 tmpclaude-*
 .idea/
 
+# Python cache
+__pycache__/
+*.pyc
+
 # typescript
 *.tsbuildinfo
 

@@ -1,0 +1,102 @@
+[
+  {
+    "name": "Bawang",
+    "aliases": ["garlic", "allium sativum"],
+    "genericName": "Allium sativum",
+    "commonUses": "Traditionally used in the Philippines as support for high cholesterol and mild blood pressure management.",
+    "warnings": "May increase bleeding risk when combined with blood thinners. Consult a doctor before using with maintenance medicines.",
+    "sideEffects": ["Bad breath", "Stomach upset", "Heartburn"],
+    "estimatedPrice": "Price varies by preparation and pharmacy",
+    "philHealthCovered": false
+  },
+  {
+    "name": "Sambong",
+    "aliases": ["blumea balsamifera", "sambong tablet", "sambong leaves"],
+    "genericName": "Blumea balsamifera",
+    "commonUses": "Used in Philippine herbal practice as a diuretic and as supportive care for kidney stones and uric acid concerns.",
+    "warnings": "Use with caution in dehydration or kidney problems. Increase water intake and consult a clinician for persistent symptoms.",
+    "sideEffects": ["Stomach discomfort", "Frequent urination", "Allergic reaction (rare)"],
+    "estimatedPrice": "Price varies by preparation and pharmacy",
+    "philHealthCovered": false
+  },
+  {
+    "name": "Tsaang-gubat",
+    "aliases": ["forest tea", "carmona retusa", "ehretia microphylla"],
+    "genericName": "Carmona retusa",
+    "commonUses": "Traditionally used for mild stomach pain and diarrhea support.",
+    "warnings": "Not a substitute for treatment of severe abdominal pain, bloody stool, or dehydration.",
+    "sideEffects": ["Mild stomach irritation", "Nausea", "Allergic reaction (rare)"],
+    "estimatedPrice": "Price varies by preparation and pharmacy",
+    "philHealthCovered": false
+  },
+  {
+    "name": "Ampalaya",
+    "aliases": ["momordica charantia", "bitter melon", "ampalaya leaves"],
+    "genericName": "Momordica charantia",
+    "commonUses": "Used in Philippine herbal practice as support for blood sugar control.",
+    "warnings": "May lower blood sugar. Use carefully with diabetes medicines to avoid hypoglycemia.",
+    "sideEffects": ["Stomach cramps", "Loose stool", "Low blood sugar"],
+    "estimatedPrice": "Price varies by preparation and pharmacy",
+    "philHealthCovered": false
+  },
+  {
+    "name": "Yerba Buena",
+    "aliases": ["mentha cordifolia", "peppermint", "mint leaves"],
+    "genericName": "Mentha cordifolia",
+    "commonUses": "Traditionally used for mild body pain, headache, and toothache relief.",
+    "warnings": "Seek proper dental or medical care if pain persists or worsens.",
+    "sideEffects": ["Mild stomach upset", "Cooling sensation", "Allergic reaction (rare)"],
+    "estimatedPrice": "Price varies by preparation and pharmacy",
+    "philHealthCovered": false
+  },
+  {
+    "name": "Ulasimang Bato",
+    "aliases": ["pansit-pansitan", "peperomia pellucida"],
+    "genericName": "Peperomia pellucida",
+    "commonUses": "Used in Philippine herbal practice to help manage uric acid and gout-related symptoms.",
+    "warnings": "Consult a doctor for severe joint swelling, fever, or kidney disease. Do not rely on herbal therapy alone for acute gout attacks.",
+    "sideEffects": ["Mild stomach upset", "Loose stool", "Allergic reaction (rare)"],
+    "estimatedPrice": "Price varies by preparation and pharmacy",
+    "philHealthCovered": false
+  },
+  {
+    "name": "Bayabas",
+    "aliases": ["guava", "psidium guajava", "guava leaves"],
+    "genericName": "Psidium guajava",
+    "commonUses": "Traditionally used for wound washing, mouth rinse for swollen gums, and mild diarrhea support.",
+    "warnings": "External or supportive use does not replace antibiotics or proper wound care for infected wounds.",
+    "sideEffects": ["Mild stomach upset", "Constipation (rare)", "Allergic reaction (rare)"],
+    "estimatedPrice": "Price varies by preparation and pharmacy",
+    "philHealthCovered": false
+  },
+  {
+    "name": "Akapulko",
+    "aliases": ["senna alata", "cassia alata", "akapulco"],
+    "genericName": "Senna alata",
+    "commonUses": "Traditionally used for fungal skin infections such as ringworm, an-an, and athlete's foot.",
+    "warnings": "For external use only unless specifically advised. Stop use if skin irritation becomes severe.",
+    "sideEffects": ["Skin irritation", "Redness", "Itching"],
+    "estimatedPrice": "Price varies by preparation and pharmacy",
+    "philHealthCovered": false
+  },
+  {
+    "name": "Lagundi",
+    "aliases": ["vitex negundo", "lagundi tablet", "lagundi leaves"],
+    "genericName": "Vitex negundo",
+    "commonUses": "Used in the Philippines as supportive treatment for cough and mild respiratory symptoms.",
+    "warnings": "Seek medical care for difficulty breathing, prolonged fever, chest pain, or worsening cough.",
+    "sideEffects": ["Mild stomach upset", "Dizziness", "Allergic reaction (rare)"],
+    "estimatedPrice": "Price varies by preparation and pharmacy",
+    "philHealthCovered": false
+  },
+  {
+    "name": "Niyog-niyogan",
+    "aliases": ["quisqualis indica", "rangoon creeper"],
+    "genericName": "Quisqualis indica",
+    "commonUses": "Traditionally used in the Philippines for intestinal worms.",
+    "warnings": "Too much may cause stomach pain, nausea, or diarrhea. Follow age-appropriate dosing guidance.",
+    "sideEffects": ["Nausea", "Hiccups", "Abdominal pain"],
+    "estimatedPrice": "Price varies by preparation and pharmacy",
+    "philHealthCovered": false
+  }
+]

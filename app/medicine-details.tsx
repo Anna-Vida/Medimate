@@ -21,6 +21,7 @@ import {
     View,
 } from "react-native";
 import { Colors } from "../constants/Colors";
+import { HeaderMetrics } from "../constants/ui";
 import {
     MedicineAnalysis,
     translateBatch,
@@ -38,6 +39,7 @@ import {
     scheduleReminderNotification,
 } from "../services/notifications";
 import { SavedScan } from "../services/storage";
+import { HeaderIconButton } from "../components/ui/header-icon-button";
 import { moderateScale, scale, verticalScale } from "../utils/responsive";
 
 export default function MedicineDetailsScreen() {
@@ -315,13 +317,11 @@ export default function MedicineDetailsScreen() {
       {/* Modern Fixed Header */}
       <SafeAreaView style={styles.safeHeader}>
         <View style={styles.header}>
-          <TouchableOpacity
+          <HeaderIconButton
+            icon="arrow-back"
             onPress={() => router.back()}
             style={styles.iconBtn}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={24} color="#0F172A" />
-          </TouchableOpacity>
+          />
           <Text style={styles.headerTitle}>Medicine Details</Text>
 
           <TouchableOpacity
@@ -969,6 +969,8 @@ const styles = StyleSheet.create({
   },
   safeHeader: {
     backgroundColor: "#FFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -979,35 +981,30 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: scale(16),
-    paddingVertical: verticalScale(12),
-    gap: 12,
+    paddingHorizontal: scale(HeaderMetrics.horizontal),
+    paddingVertical: verticalScale(HeaderMetrics.regularVertical),
+    gap: scale(HeaderMetrics.contentGap),
   },
   headerTitle: {
-    fontSize: moderateScale(18),
+    fontSize: moderateScale(HeaderMetrics.titleSize),
     fontWeight: "800",
     color: "#0F172A",
     flex: 1,
     textAlign: "center",
   },
   iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F1F5F9",
   },
   langBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    backgroundColor: "#EFF6FF",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#FFFFFF",
+    minHeight: HeaderMetrics.actionSize,
+    paddingHorizontal: scale(12),
+    borderRadius: HeaderMetrics.actionRadius,
     borderWidth: 1,
-    borderColor: "#BFDBFE",
+    borderColor: "#D8DCE2",
   },
   langBtnText: {
     fontSize: moderateScale(14),

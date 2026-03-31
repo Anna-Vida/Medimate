@@ -1,5 +1,9 @@
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import Constants from "expo-constants";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Speech from "expo-speech";
+import { Audio } from "expo-av";
+import { useEffect } from "react";
 
 type SpeechRecognitionEventName = "start" | "end" | "result" | "error";
 
@@ -18,10 +22,42 @@ type SpeechRecognitionModuleShape = {
   ) => void;
 };
 
+const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+const genAI = API_KEY ? new GoogleGenerativeAI(API_KEY) : null;
+const TRANSCRIPTION_MODEL = "gemini-2.5-flash";
+
 let cachedSpeechRecognitionModule: SpeechRecognitionModuleShape | null | undefined;
+let activeRecording: Audio.Recording | null = null;
+
+const fallbackListeners: Record<
+  SpeechRecognitionEventName,
+  Set<SpeechRecognitionListener>
+> = {
+  start: new Set(),
+  end: new Set(),
+  result: new Set(),
+  error: new Set(),
+};
+
+function emitFallbackEvent(
+  eventName: SpeechRecognitionEventName,
+  payload: any = {},
+): void {
+  for (const listener of fallbackListeners[eventName]) {
+    try {
+      listener(payload);
+    } catch (error) {
+      console.warn(`Speech listener for ${eventName} failed:`, error);
+    }
+  }
+}
 
 function isExpoGo(): boolean {
   return Constants.executionEnvironment === "storeClient";
+}
+
+function hasGeminiTranscriptionFallback(): boolean {
+  return !!genAI;
 }
 
 function getSpeechRecognitionModule(): SpeechRecognitionModuleShape | null {
@@ -44,11 +80,102 @@ function getSpeechRecognitionModule(): SpeechRecognitionModuleShape | null {
   return cachedSpeechRecognitionModule;
 }
 
-// Check if speech recognition is available
+function getAudioMimeType(uri: string): string {
+  const lower = uri.toLowerCase();
+  if (lower.endsWith(".aac")) return "audio/aac";
+  if (lower.endsWith(".mp3")) return "audio/mp3";
+  if (lower.endsWith(".wav")) return "audio/wav";
+  if (lower.endsWith(".ogg")) return "audio/ogg";
+  if (lower.endsWith(".flac")) return "audio/flac";
+  if (lower.endsWith(".m4a")) return "audio/aac";
+  return "audio/aac";
+}
+
+async function transcribeWithGemini(uri: string): Promise<string> {
+  if (!genAI) {
+    throw new Error("GEMINI_KEY_MISSING");
+  }
+
+  const base64Audio = await FileSystem.readAsStringAsync(uri, {
+    encoding: "base64",
+  });
+
+  const model = genAI.getGenerativeModel({ model: TRANSCRIPTION_MODEL });
+  const result = await model.generateContent([
+    "Generate a clean transcript of the speech in this audio. Return only the spoken words. No commentary.",
+    {
+      inlineData: {
+        data: base64Audio,
+        mimeType: getAudioMimeType(uri),
+      },
+    },
+  ]);
+
+  return result.response.text().trim();
+}
+
+async function startFallbackRecording(): Promise<void> {
+  if (!hasGeminiTranscriptionFallback()) {
+    throw new Error("SPEECH_RECOGNITION_UNAVAILABLE");
+  }
+
+  if (activeRecording) {
+    return;
+  }
+
+  await Audio.setAudioModeAsync({
+    allowsRecordingIOS: true,
+    playsInSilentModeIOS: true,
+  });
+
+  const recording = new Audio.Recording();
+  await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+  await recording.startAsync();
+  activeRecording = recording;
+  emitFallbackEvent("start");
+}
+
+async function stopFallbackRecording(): Promise<void> {
+  const recording = activeRecording;
+  activeRecording = null;
+
+  if (!recording) {
+    emitFallbackEvent("end");
+    return;
+  }
+
+  try {
+    await recording.stopAndUnloadAsync();
+    emitFallbackEvent("end");
+    const uri = recording.getURI();
+    if (!uri) {
+      throw new Error("No recorded audio found.");
+    }
+
+    const transcript = await transcribeWithGemini(uri);
+    if (!transcript) {
+      throw new Error("No speech detected.");
+    }
+
+    emitFallbackEvent("result", {
+      results: [{ transcript }],
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Could not transcribe audio.";
+    emitFallbackEvent("error", { message });
+  } finally {
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      playsInSilentModeIOS: true,
+    });
+  }
+}
+
 export async function checkSpeechRecognitionAvailable(): Promise<boolean> {
   const speechRecognition = getSpeechRecognitionModule();
   if (!speechRecognition) {
-    return false;
+    return hasGeminiTranscriptionFallback();
   }
 
   try {
@@ -61,11 +188,11 @@ export async function checkSpeechRecognitionAvailable(): Promise<boolean> {
   }
 }
 
-// Request microphone permission for speech recognition
 export async function requestSpeechPermission(): Promise<boolean> {
   const speechRecognition = getSpeechRecognitionModule();
   if (!speechRecognition) {
-    return false;
+    const permission = await Audio.requestPermissionsAsync();
+    return permission.granted;
   }
 
   try {
@@ -77,13 +204,13 @@ export async function requestSpeechPermission(): Promise<boolean> {
   }
 }
 
-// Start listening for speech
 export async function startListening(
   language: string = "en-US",
 ): Promise<void> {
   const speechRecognition = getSpeechRecognitionModule();
   if (!speechRecognition) {
-    throw new Error("SPEECH_RECOGNITION_UNAVAILABLE");
+    await startFallbackRecording();
+    return;
   }
 
   try {
@@ -101,10 +228,10 @@ export async function startListening(
   }
 }
 
-// Stop listening
 export async function stopListening(): Promise<void> {
   const speechRecognition = getSpeechRecognitionModule();
   if (!speechRecognition) {
+    await stopFallbackRecording();
     return;
   }
 
@@ -115,7 +242,6 @@ export async function stopListening(): Promise<void> {
   }
 }
 
-// Speak text aloud (text-to-speech)
 export function speakText(
   text: string,
   onDone?: () => void,
@@ -128,12 +254,10 @@ export function speakText(
   });
 }
 
-// Stop speaking
 export function stopSpeaking(): void {
   Speech.stop();
 }
 
-// Extract person info from speech (patterns like "I'm Mark", "My name is Mark", "This is Mark")
 export function extractPersonFromSpeech(transcript: string): {
   name: string | null;
   details: string;
@@ -163,7 +287,6 @@ export function extractPersonFromSpeech(transcript: string): {
   return { name: null, details: transcript };
 }
 
-// Extract query from speech (patterns like "Who is Mark?")
 export function extractQueryFromSpeech(transcript: string): string | null {
   const patterns = [
     /who\s+is\s+(\w+)/i,
@@ -187,9 +310,15 @@ export function useSpeechRecognitionEvent(
   listener: SpeechRecognitionListener,
 ): void {
   const speechRecognition = getSpeechRecognitionModule();
-  if (!speechRecognition?.useSpeechRecognitionEvent) {
+  if (speechRecognition?.useSpeechRecognitionEvent) {
+    speechRecognition.useSpeechRecognitionEvent(eventName, listener);
     return;
   }
 
-  speechRecognition.useSpeechRecognitionEvent(eventName, listener);
+  useEffect(() => {
+    fallbackListeners[eventName].add(listener);
+    return () => {
+      fallbackListeners[eventName].delete(listener);
+    };
+  }, [eventName, listener]);
 }

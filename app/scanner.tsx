@@ -21,6 +21,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors } from "../constants/Colors";
+import { HeaderMetrics } from "../constants/ui";
 import {
     analyzeInteractions,
     analyzeMedicineImage,
@@ -54,6 +55,7 @@ import {
 } from "../services/notifications";
 import { getRecentScans, SavedScan, saveScan } from "../services/storage";
 import { isInternetAvailable } from "../services/network";
+import { HeaderIconButton } from "../components/ui/header-icon-button";
 import { moderateScale, scale, verticalScale } from "../utils/responsive";
 // Configure notification handler
 try {
@@ -138,13 +140,11 @@ const RecentScansModal = ({
         <View style={styles.bottomSheet}>
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>Recent Scans</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeIconBtn}>
-              <Ionicons
-                name="close-circle"
-                size={32}
-                color={Colors.primaryDark}
-              />
-            </TouchableOpacity>
+            <HeaderIconButton
+              icon="close"
+              onPress={onClose}
+              style={styles.closeIconBtn}
+            />
           </View>
           {loading ? (
             <ActivityIndicator
@@ -676,6 +676,26 @@ export default function Scanner() {
     },
   });
 
+  const getOfflineSearchSeedFromPhoto = (uri: string | null): string => {
+    if (!uri) return "";
+
+    const hint = decodeURIComponent(uri.split("/").pop() || "")
+      .replace(/\.[a-z0-9]+$/i, "")
+      .replace(/[_-]+/g, " ")
+      .replace(/\b(img|image|photo|scan|camera|screenshot|captured)\b/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    return /[a-zA-Z]{4,}/.test(hint) ? hint : "";
+  };
+
+  const openOfflineSearchModal = (uri: string | null) => {
+    setResults([]);
+    setInteractionReport(null);
+    setOfflineSearchInput(getOfflineSearchSeedFromPhoto(uri));
+    setShowOfflineSearchModal(true);
+  };
+
   const persistAnalysisResults = (analysisResults: MedicineAnalysis[]) => {
     void (async () => {
       try {
@@ -729,6 +749,7 @@ export default function Scanner() {
     void saveScan([offlineResult], photo || "offline-search");
     void saveMedication(photo || "offline-search", offlineResult);
     setInteractionReport(null);
+    setOfflineSearchInput("");
     setShowOfflineSearchModal(false);
   };
   // TTS Handler ΓÇö uses pre-translated text when available, otherwise translates on-the-fly
@@ -865,6 +886,8 @@ export default function Scanner() {
     setResults([]);
     setInteractionReport(null);
     setError(null);
+    setOfflineSearchInput("");
+    setShowOfflineSearchModal(false);
     setExpandedMedIndex(0);
   };
   const requestNotificationPermissions = async () => {
@@ -949,10 +972,7 @@ export default function Scanner() {
           setShowOfflineSearchModal(false);
           runInteractionAnalysis(analysisResults);
         } else {
-          const fileName = decodeURIComponent(photo.split("/").pop() || "")
-            .replace(/\.[a-z0-9]+$/i, "")
-            .replace(/[_-]+/g, " ")
-            .trim();
+          const fileName = getOfflineSearchSeedFromPhoto(photo);
           const localMatch = fileName
             ? findOfflineMedicineByName(fileName)
             : null;
@@ -963,14 +983,13 @@ export default function Scanner() {
             setShowOfflineSearchModal(false);
             setInteractionReport(null);
           } else {
-            setShowOfflineSearchModal(true);
+            openOfflineSearchModal(photo);
           }
         }
         return;
       }
       // 1. Identification
       const analysis = await analyzeMedicineImage(photo, scanMode);
-      setResults(analysis);
 
       if (
         analysis.length === 1 &&
@@ -990,10 +1009,12 @@ export default function Scanner() {
           setShowOfflineSearchModal(false);
           runInteractionAnalysis(analysisResults);
         } else {
-          setShowOfflineSearchModal(true);
+          openOfflineSearchModal(photo);
         }
+        return;
       }
 
+      setResults(analysis);
       persistAnalysisResults(analysis);
       runInteractionAnalysis(analysis);
       // 3. Auto-Schedule Reminders (Optional - maybe too aggressive for multi-meds)
@@ -1010,7 +1031,7 @@ export default function Scanner() {
       }
     } catch (err) {
       if (err instanceof Error && err.message === "OFFLINE_MODE") {
-        setShowOfflineSearchModal(true);
+        openOfflineSearchModal(photo);
       } else {
         setError(err instanceof Error ? err.message : "Analysis failed.");
       }
@@ -1021,6 +1042,8 @@ export default function Scanner() {
   const handleRecentSelect = (scan: SavedScan) => {
     setPhoto(scan.imageUri);
     setResults(scan.analysis);
+    setOfflineSearchInput("");
+    setShowOfflineSearchModal(false);
     // We could re-run interaction check here if we saved it differently,
     // but for now let's re-run it live or just skip if we don't save reports.
     // Let's quickly check if we can re-run:
@@ -1046,9 +1069,13 @@ export default function Scanner() {
           <Image source={{ uri: photo }} style={styles.fullScreenImage} />
           {/* Header Actions */}
           <SafeAreaView style={styles.topOverlay}>
-            <TouchableOpacity onPress={retakePhoto} style={styles.iconBtn}>
-              <Ionicons name="close" size={28} color="#FFF" />
-            </TouchableOpacity>
+            <HeaderIconButton
+              icon="close"
+              onPress={retakePhoto}
+              variant="dark"
+              iconColor="#FFFFFF"
+              style={styles.iconBtn}
+            />
           </SafeAreaView>
           {/* Loading State */}
           {isAnalyzing && (
@@ -1125,12 +1152,12 @@ export default function Scanner() {
                           color={Colors.primary}
                         />
                       </TouchableOpacity>
-                      <TouchableOpacity
+                      <HeaderIconButton
+                        icon="camera-outline"
                         onPress={retakePhoto}
+                        iconColor="#64748B"
                         style={styles.sheetCloseBtn}
-                      >
-                        <Ionicons name="camera-outline" size={20} color="#64748B" />
-                      </TouchableOpacity>
+                      />
                     </View>
                     <ScrollView
                       style={styles.resultsScroll}
@@ -1914,8 +1941,8 @@ const styles = StyleSheet.create({
   headerBar: {
     flexDirection: "row",
     justifyContent: "center",
-    paddingHorizontal: scale(20),
-    paddingTop: verticalScale(20),
+    paddingHorizontal: scale(HeaderMetrics.horizontal),
+    paddingTop: verticalScale(HeaderMetrics.compactTop),
     zIndex: 10,
   },
   modeToggleContainer: {
@@ -1945,8 +1972,11 @@ const styles = StyleSheet.create({
   },
   topOverlay: {
     position: "absolute",
-    top: verticalScale(40),
-    left: scale(20),
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: scale(HeaderMetrics.horizontal),
+    paddingTop: verticalScale(HeaderMetrics.compactTop),
     zIndex: 10,
   },
   bottomControls: {
@@ -1998,12 +2028,6 @@ const styles = StyleSheet.create({
     marginBottom: verticalScale(4),
   },
   iconBtn: {
-    width: scale(44),
-    height: scale(44),
-    borderRadius: scale(22),
-    backgroundColor: "rgba(0,0,0,0.5)",
-    alignItems: "center",
-    justifyContent: "center",
   },
   // Loading & Analysis
   darkOverlay: {
@@ -2397,7 +2421,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: Colors.primary,
   },
-  closeIconBtn: { padding: 8 },
+  closeIconBtn: {},
   recentList: { padding: scale(20) },
   // Permissions
   permContainer: {
@@ -2467,9 +2491,9 @@ const styles = StyleSheet.create({
   sheetTopRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: scale(12),
-    paddingHorizontal: scale(16),
-    paddingVertical: verticalScale(14),
+    gap: scale(HeaderMetrics.contentGap),
+    paddingHorizontal: scale(HeaderMetrics.horizontal),
+    paddingVertical: verticalScale(HeaderMetrics.regularVertical),
     borderBottomWidth: 1,
     borderBottomColor: "#F1F5F9",
   },
@@ -2482,7 +2506,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sheetTopTitle: {
-    fontSize: moderateScale(16),
+    fontSize: moderateScale(HeaderMetrics.titleSize),
     fontWeight: "700",
     color: "#1E293B",
   },
@@ -2499,12 +2523,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   sheetCloseBtn: {
-    width: scale(36),
-    height: scale(36),
-    borderRadius: scale(18),
-    backgroundColor: "#F1F5F9",
-    alignItems: "center",
-    justifyContent: "center",
   },
   // Error State
   errorTitle: {
@@ -2734,11 +2752,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    paddingHorizontal: scale(10),
-    paddingVertical: verticalScale(6),
-    borderRadius: 20,
-    backgroundColor: "#F1F5F9",
-    marginRight: scale(8),
+    justifyContent: "center",
+    minHeight: HeaderMetrics.actionSize,
+    paddingHorizontal: scale(12),
+    borderRadius: HeaderMetrics.actionRadius,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D8DCE2",
+    marginRight: scale(4),
   },
   langChipText: {
     fontSize: moderateScale(14),

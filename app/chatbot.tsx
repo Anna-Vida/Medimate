@@ -1,9 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import NetInfo, { NetInfoState } from "@react-native-community/netinfo";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system/legacy";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -18,8 +21,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import AppHeader from "../components/app-header";
 import { Colors } from "../constants/Colors";
 import { Radius, Spacing } from "../constants/ui";
-import { ChatMessage, getChatbotReply } from "../services/chatbot";
+import {
+  AssistantMode,
+  ChatMessage,
+  getChatbotReply,
+} from "../services/chatbot";
 import { LANGUAGES, Language } from "../services/languages";
+import { getActiveMedications } from "../services/medicationStorage";
 import {
   checkSpeechRecognitionAvailable,
   requestSpeechPermission,
@@ -29,9 +37,15 @@ import {
   stopSpeaking,
   useSpeechRecognitionEvent,
 } from "../services/speechService";
+import { getRecentScans } from "../services/storage";
 
 interface UIChatMessage extends ChatMessage {
   timestamp: number;
+}
+
+interface PendingImageAttachment {
+  uri: string;
+  name: string;
 }
 
 const QUICK_PROMPTS = [
@@ -39,6 +53,13 @@ const QUICK_PROMPTS = [
   "What should I prepare before going to hospital?",
   "How do I remember my daily medicines?",
   "What food should seniors avoid with common medicines?",
+];
+
+const CONSULTANT_PROMPTS = [
+  "Review my recent medicine scan and tell me what to watch out for",
+  "Explain my dosage in simple words and when I should take it",
+  "What side effects or interactions should I monitor right now?",
+  "When should I call a doctor about this medicine?",
 ];
 
 export default function ChatbotScreen() {
@@ -50,9 +71,15 @@ export default function ChatbotScreen() {
   const [selectedLanguage, setSelectedLanguage] = useState<Language>(
     LANGUAGES[0],
   );
+  const [assistantMode, setAssistantMode] =
+    useState<AssistantMode>("carebot");
   const [isListening, setIsListening] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [speakingKey, setSpeakingKey] = useState<string | null>(null);
+  const [contextSummary, setContextSummary] = useState("");
+  const [contextPreview, setContextPreview] = useState<string[]>([]);
+  const [pendingImage, setPendingImage] =
+    useState<PendingImageAttachment | null>(null);
   const [messages, setMessages] = useState<UIChatMessage[]>([
     {
       role: "assistant",
@@ -69,8 +96,12 @@ export default function ChatbotScreen() {
     });
 
   const canSend = useMemo(
-    () => input.trim().length > 0 && !loading,
-    [input, loading],
+    () => (input.trim().length > 0 || !!pendingImage) && !loading,
+    [input, loading, pendingImage],
+  );
+  const quickPrompts = useMemo(
+    () => (assistantMode === "consultant" ? CONSULTANT_PROMPTS : QUICK_PROMPTS),
+    [assistantMode],
   );
 
   useSpeechRecognitionEvent("result", (event) => {
@@ -102,6 +133,64 @@ export default function ChatbotScreen() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const loadConsultantContext = async () => {
+      try {
+        const [activeMeds, recentScans] = await Promise.all([
+          getActiveMedications(),
+          getRecentScans(),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        const medLines = activeMeds
+          .slice(0, 5)
+          .map(
+            (med) =>
+              `${med.analysis.medicineName} | ${med.analysis.activeIngredients} | ${med.analysis.dosage || "No dosage saved"}`,
+          );
+
+        const scanLines = recentScans
+          .slice(0, 3)
+          .flatMap((scan) =>
+            scan.analysis.slice(0, 3).map((result) => {
+              const warningText = Array.isArray(result.warnings)
+                ? result.warnings.join(", ")
+                : result.warnings;
+              return `${result.medicineName} | ${result.activeIngredients} | ${warningText || "No warning saved"}`;
+            }),
+          );
+
+        const sections = [];
+        if (medLines.length > 0) {
+          sections.push(`Active medicines:\n${medLines.join("\n")}`);
+        }
+        if (scanLines.length > 0) {
+          sections.push(`Recent scanned medicines:\n${scanLines.join("\n")}`);
+        }
+
+        setContextSummary(sections.join("\n\n"));
+        setContextPreview([...medLines, ...scanLines].slice(0, 4));
+      } catch (error) {
+        console.warn("Failed to load CareBot context:", error);
+        if (!cancelled) {
+          setContextSummary("");
+          setContextPreview([]);
+        }
+      }
+    };
+
+    void loadConsultantContext();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const t = setTimeout(() => {
       chatRef.current?.scrollToEnd({ animated: true });
     }, 70);
@@ -111,16 +200,43 @@ export default function ChatbotScreen() {
 
   const sendMessage = async (text: string) => {
     const prompt = text.trim();
-    if (!prompt || loading) {
+    if ((!prompt && !pendingImage) || loading) {
       return;
+    }
+
+    let imageBase64: string | undefined;
+    let outgoingText = prompt;
+    if (pendingImage) {
+      try {
+        imageBase64 = await FileSystem.readAsStringAsync(pendingImage.uri, {
+          encoding: "base64",
+        });
+      } catch {
+        Alert.alert(
+          "Upload Failed",
+          "Could not read the selected image. Please try another file.",
+        );
+        return;
+      }
+      if (!outgoingText) {
+        outgoingText =
+          "Please review this uploaded medical image or check-up result.";
+      }
     }
 
     const nextMessages: UIChatMessage[] = [  
       ...messages,
-      { role: "user", content: prompt, timestamp: Date.now() },
+      {
+        role: "user",
+        content: pendingImage
+          ? `${outgoingText} [Image attached: ${pendingImage.name}]`
+          : outgoingText,
+        timestamp: Date.now(),
+      },
     ];
     setMessages(nextMessages);
     setInput("");
+    setPendingImage(null);
     setLoading(true);
 
     const aiMessages: ChatMessage[] = nextMessages.map(({ role, content }) => ({
@@ -130,6 +246,9 @@ export default function ChatbotScreen() {
     try {
       const reply = await getChatbotReply(aiMessages, {
         languageName: selectedLanguage.geminiName,
+        mode: assistantMode,
+        contextSummary: assistantMode === "consultant" ? contextSummary : "",
+        imageBase64,
       });
       setMessages((prev) => [
         ...prev,
@@ -225,10 +344,35 @@ export default function ChatbotScreen() {
     }
   };
 
+  const handlePickImage = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "image/*",
+        multiple: false,
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || result.assets.length === 0) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      setPendingImage({
+        uri: asset.uri,
+        name: asset.name || "medical-image.jpg",
+      });
+    } catch {
+      Alert.alert(
+        "Upload Failed",
+        "Could not open the image picker. Please try again.",
+      );
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={["left", "right", "bottom"]}>
       <AppHeader
-        title="CareBot"
+        title={assistantMode === "consultant" ? "Virtual Consultant" : "CareBot"}
         subtitle={`AI health support (${selectedLanguage.geminiName})`}
         onBack={() => router.back()}
         rightIcon="volume-mute"
@@ -249,6 +393,43 @@ export default function ChatbotScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.controlsRow}>
+            <View style={styles.modeSwitch}>
+              <TouchableOpacity
+                style={[
+                  styles.modeChip,
+                  assistantMode === "carebot" && styles.modeChipActive,
+                ]}
+                onPress={() => setAssistantMode("carebot")}
+                activeOpacity={0.85}
+              >
+                <Text
+                  style={[
+                    styles.modeChipText,
+                    assistantMode === "carebot" && styles.modeChipTextActive,
+                  ]}
+                >
+                  CareBot
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modeChip,
+                  assistantMode === "consultant" && styles.modeChipActive,
+                ]}
+                onPress={() => setAssistantMode("consultant")}
+                activeOpacity={0.85}
+              >
+                <Text
+                  style={[
+                    styles.modeChipText,
+                    assistantMode === "consultant" &&
+                      styles.modeChipTextActive,
+                  ]}
+                >
+                  Consultant
+                </Text>
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity
               style={styles.languageChip}
               onPress={() => setLanguageModalVisible(true)}
@@ -261,6 +442,35 @@ export default function ChatbotScreen() {
             </TouchableOpacity>
           </View>
 
+          {assistantMode === "consultant" && (
+            <View style={styles.consultantBanner}>
+              <Text style={styles.consultantBannerTitle}>
+                Virtual Consultant
+              </Text>
+              <Text style={styles.consultantBannerText}>
+                Uses your recent scans and saved medicines when available. It
+                does not replace a doctor or pharmacist.
+              </Text>
+            </View>
+          )}
+
+          {assistantMode === "consultant" && contextPreview.length > 0 && (
+            <View style={styles.contextCard}>
+              <Text style={styles.contextCardTitle}>Consultation Summary</Text>
+              <Text style={styles.contextCardSubtitle}>
+                The consultant is using these recent medicine details:
+              </Text>
+              {contextPreview.map((line, index) => (
+                <Text
+                  key={`${index}-${line}`}
+                  style={styles.contextCardLine}
+                >
+                  {line}
+                </Text>
+              ))}
+            </View>
+          )}
+
           <View style={styles.promptSection}>
             <Text style={styles.promptSectionLabel}>Quick prompts</Text>
             <ScrollView
@@ -268,7 +478,7 @@ export default function ChatbotScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.promptWrap}
             >
-              {QUICK_PROMPTS.map((prompt) => (
+              {quickPrompts.map((prompt) => (
                 <TouchableOpacity
                   key={prompt}
                   style={styles.promptChip}
@@ -357,6 +567,27 @@ export default function ChatbotScreen() {
         </ScrollView>
 
         <View style={styles.inputArea}>
+          {pendingImage && (
+            <View style={styles.attachmentPreview}>
+              <Image
+                source={{ uri: pendingImage.uri }}
+                style={styles.attachmentThumb}
+              />
+              <View style={styles.attachmentTextWrap}>
+                <Text style={styles.attachmentTitle}>Attached image</Text>
+                <Text style={styles.attachmentName} numberOfLines={1}>
+                  {pendingImage.name}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setPendingImage(null)}
+                style={styles.attachmentRemove}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="close" size={16} color={Colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+          )}
           <TextInput
             style={styles.input}
             placeholder="Ask CareBot anything about your care"
@@ -365,6 +596,14 @@ export default function ChatbotScreen() {
             onChangeText={setInput}
             multiline
           />
+          <TouchableOpacity
+            style={[styles.mediaButton, loading && { opacity: 0.5 }]}
+            onPress={handlePickImage}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="image-outline" size={18} color={Colors.primary} />
+          </TouchableOpacity>
           <TouchableOpacity
             style={[
               styles.micButton,
@@ -474,7 +713,36 @@ const styles = StyleSheet.create({
   controlsRow: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
     marginBottom: 8,
+  },
+  modeSwitch: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    padding: 4,
+    gap: 4,
+    flexShrink: 1,
+  },
+  modeChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: Radius.sm,
+  },
+  modeChipActive: {
+    backgroundColor: Colors.primary,
+  },
+  modeChipText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: Colors.textSecondary,
+  },
+  modeChipTextActive: {
+    color: Colors.white,
   },
   languageChip: {
     flexDirection: "row",
@@ -492,6 +760,51 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: 12,
     fontWeight: "700",
+  },
+  consultantBanner: {
+    backgroundColor: Colors.primaryBg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    padding: 12,
+    marginBottom: 10,
+  },
+  consultantBannerTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: Colors.primary,
+    marginBottom: 4,
+  },
+  consultantBannerText: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: Colors.textSecondary,
+  },
+  contextCard: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    padding: 12,
+    marginBottom: 10,
+  },
+  contextCardTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: Colors.textPrimary,
+    marginBottom: 4,
+  },
+  contextCardSubtitle: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginBottom: 8,
+    lineHeight: 17,
+  },
+  contextCardLine: {
+    fontSize: 12,
+    color: Colors.textPrimary,
+    lineHeight: 18,
+    marginBottom: 4,
   },
   promptSection: {
     marginBottom: 4,
@@ -590,6 +903,7 @@ const styles = StyleSheet.create({
   },
   inputArea: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "flex-end",
     gap: 8,
     paddingHorizontal: Spacing.md,
@@ -598,6 +912,44 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
+  },
+  attachmentPreview: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.background,
+    borderRadius: Radius.md,
+    padding: 8,
+  },
+  attachmentThumb: {
+    width: 42,
+    height: 42,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.border,
+  },
+  attachmentTextWrap: {
+    flex: 1,
+  },
+  attachmentTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: Colors.primary,
+    marginBottom: 2,
+  },
+  attachmentName: {
+    fontSize: 12,
+    color: Colors.textPrimary,
+  },
+  attachmentRemove: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.primaryBg,
   },
   input: {
     flex: 1,
@@ -610,6 +962,16 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     color: Colors.textPrimary,
     fontSize: 14,
+  },
+  mediaButton: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
   },
   sendButton: {
     width: 44,
