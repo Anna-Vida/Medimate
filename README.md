@@ -553,6 +553,31 @@ Before treating MediMate as a production healthcare application:
 
 ---
 
+## My Contribution
+
+**Role: Sole Developer / Full-Stack Mobile Developer**
+
+I designed and built **MediMate independently from end to end**. I was responsible for the mobile application, backend/serverless integration, authentication, local data layer, AI-assisted scanning, offline fallback behavior, healthcare-support features, and build configuration.
+
+Key areas I implemented include:
+
+- React Native + Expo mobile application
+- TypeScript application architecture and Expo Router navigation
+- Firebase Authentication and Firestore integration
+- Firebase Functions AI proxy
+- Gemini-assisted prescription and medicine analysis
+- ML Kit on-device OCR and offline medicine matching
+- Medication records, inventory, schedules, and reminders
+- Drug-interaction checking and offline fallback rules
+- CareBot and language-aware responses
+- Emergency contacts, SMS, location, and pharmacy-finder features
+- AsyncStorage user-scoped persistence
+- EAS development, preview, and production build configuration
+
+This project represents my work as the **sole developer responsible for the mobile frontend, application logic, cloud/backend integration, and supporting services**.
+
+---
+
 ## Author
 
 **Anna Patricia B. Vida**
